@@ -22,7 +22,26 @@ def get_summary(event: dict):
 @app.get("/otx")
 def read_otx():
     pulses = get_recent_pulses()
+    events = extract_pulse_content(pulses)
     return {
         "count": len(pulses),
-        "samples": pulses[:3]
+        "ip": events["ip"],
+        "type": events["type"],
+        "source": events["source"],
+        "timestamp": events["timestamp"],
+        "geo": None
     }
+
+def extract_pulse_content(pulses):
+    events = []
+    for pulse in pulses:
+        for indicator in pulse.get("indicators", []):
+            if indicator.get("type") == "IPv4":
+                events.append({
+                    "ip": indicator["indicator"],
+                    "type": indicator["indicator_type"],
+                    "source": pulse["name"],
+                    "timestamp": pulse["modified"],
+                    "geo": None  # Add geolocation later
+                })
+    return events
