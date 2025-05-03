@@ -1,1 +1,1 @@
-# ThreatEchoAI
+# GlobalSentinelAI
