@@ -50,22 +50,10 @@ async def lifespan():
         print("[INFO] Fetch task cancelled")
 
 # START OF INGESTION API FUNCTIONS
-@app.get("/events")
-async def get_all_events():
-    otx = await get_pulse_events()
-    abuse = await get_abuseipdb_events()
-    events = extract_pulse_content(otx) + abuse
-    return {"count": len(events), "events": events}
 
 @app.get("/otx/raw")
 async def otx_raw():
     pulses = await get_pulse_events()
-    for i, pulse in enumerate(pulses[:5]):
-        print(f"\n[{i+1}] Pulse name: {pulse.get('name')}")
-        print(f"    Modified: {pulse.get('modified')}")
-        print(f"    Tags: {pulse.get('tags')}")
-        print(f"    Indicators: {len(pulse.get('indicators', []))}")
-    
     return pulses
 
 @app.get("/events")
@@ -74,20 +62,5 @@ async def get_all_events():
     abuse_task = get_abuseipdb_events()
     
     otx, abuse = await asyncio.gather(otx_task, abuse_task)
-    events = extract_pulse_content(otx) + abuse
+    events = otx + abuse
     return {"count": len(events), "events": events}
-
-
-def extract_pulse_content(pulses):
-    events = []
-    for pulse in pulses:
-        for indicator in pulse.get("indicators", []):
-            if indicator.get("type") == "IPv4":
-                events.append({
-                    "ip": indicator["indicator"],
-                    "type": indicator["indicator_type"],
-                    "source": pulse["name"],
-                    "timestamp": pulse["modified"],
-                    "geo": None  # Add geolocation later
-                })
-    return events

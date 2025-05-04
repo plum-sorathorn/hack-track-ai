@@ -1,7 +1,6 @@
 import os
 import asyncio
 from math import ceil
-from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -10,7 +9,7 @@ if not OTX_API_KEY:
     raise RuntimeError("OTX_API_KEY environment variable is required")
 
 BASE = "https://otx.alienvault.com/api/v1"
-PAGE_SIZE = 5
+PAGE_SIZE = 50
 MAX_PAGES = 1
 
 async def fetch_page(client: httpx.AsyncClient, page: int):
@@ -31,13 +30,13 @@ async def get_pulse_events():
     
     try:
         async with httpx.AsyncClient(headers=headers, timeout=30.0) as client:
-            first_page, total_count = await fetch_page(client, page=1)
+            first_page_results, total_count = await fetch_page(client, page=1)
 
             total_pages = ceil(total_count / PAGE_SIZE)
             pages_to_fetch = min(total_pages, MAX_PAGES)
 
             if pages_to_fetch <= 1:
-                return first_page
+                return first_page_results
 
             tasks = [
                 fetch_page(client, page=p)
@@ -46,7 +45,7 @@ async def get_pulse_events():
             results = await asyncio.gather(*tasks)
 
             # stitch all results together
-            all_pulses = first_page + [
+            all_pulses = first_page_results + [
                 item
                 for (page_results, _) in results
                 for item in page_results
