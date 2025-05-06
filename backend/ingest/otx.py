@@ -16,7 +16,7 @@ async def fetch_page(client: httpx.AsyncClient, page: int):
     params = {
         "limit": PAGE_SIZE,
         "page": page,
-        "sort": "modified",
+        "sort": "-modified",
         "q": "",
     }
     url = f"{BASE}/search/pulses"
@@ -52,4 +52,4 @@ async def get_pulse_events():
             ]
             return all_pulses
     except:
-        print("Timedout")
+        print("Timed-out")
