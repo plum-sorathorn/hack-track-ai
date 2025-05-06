@@ -1,4 +1,6 @@
 Here's an API response documenting a kind of cyberattack. 
 It may be a social engineering post, or may directly describe an attack. 
-Describe the attack in a sentence less than 25 words.
-It must be described in a general way. [insert response]
+Describe the attack in a sentence less than 25 words. 
+It must be described in a general way. 
+Sentence format: "a _ attack on _ [location/company] [description]". 
+Attack: 
