@@ -34,7 +34,7 @@ async def lifespan():
             otx_pulses = await get_pulse_events()
             abuse_events = await get_abuseipdb_events()
 
-            all_events = extract_pulse_content(otx_pulses) + abuse_events
+            all_events = otx_pulses + abuse_events
             print(f"[INFO] Pulled {len(otx_pulses)} OTX pulses and {len(abuse_events)} AbuseIPDB events")
             for event in all_events[:5]:
                 print(f" - {event['ip']} from {event['source']}")
