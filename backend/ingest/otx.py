@@ -1,7 +1,7 @@
 import os
 import asyncio
 from math import ceil
-
+from datetime import datetime
 import httpx
 
 OTX_API_KEY = os.getenv("OTX_API_KEY")
@@ -11,6 +11,22 @@ if not OTX_API_KEY:
 BASE = "https://otx.alienvault.com/api/v1"
 PAGE_SIZE = 50
 MAX_PAGES = 1
+
+# 🔧 Transform OTX pulse into a valid Event record
+def transform_otx_pulse(pulse):
+    return {
+        "source": "OTX",
+        "timestamp": datetime.fromisoformat(pulse.get("modified")).isoformat(),
+        "abuse_type": pulse.get("type", "unknown"),
+        "abuse_ip": None,
+        "abuse_geo": {},
+        "abuse_confidence_score": None,
+        "abuse_total_reports": None,
+        "abuse_distinct_users": None,
+        "abuse_reports": None,
+        "otx_name": pulse.get("name"),
+        "otx_description": pulse.get("description"),
+    }
 
 async def fetch_page(client: httpx.AsyncClient, page: int):
     params = {
@@ -36,7 +52,7 @@ async def get_pulse_events():
             pages_to_fetch = min(total_pages, MAX_PAGES)
 
             if pages_to_fetch <= 1:
-                return first_page_results
+                return [transform_otx_pulse(p) for p in first_page_results]
 
             tasks = [
                 fetch_page(client, page=p)
@@ -44,12 +60,14 @@ async def get_pulse_events():
             ]
             results = await asyncio.gather(*tasks)
 
-            # stitch all results together
+            # Flatten and transform all pulses
             all_pulses = first_page_results + [
                 item
                 for (page_results, _) in results
                 for item in page_results
             ]
-            return all_pulses
-    except:
-        print("Timed-out")
+
+            return [transform_otx_pulse(p) for p in all_pulses]
+    except Exception as e:
+        print(f"[ERROR] OTX fetch failed: {e}")
+        return []

@@ -21,20 +21,23 @@ async def get_abuseipdb_events(confidence_min=90):
         "confidenceMinimum": confidence_min
     }
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(ABUSE_URL, headers=headers, params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        now = datetime.now()
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(ABUSE_URL, headers=headers, params=params)
+            resp.raise_for_status()
+            data = resp.json()
 
-        eventsIP = []
-        for item in data.get("data", []):
-            eventsIP.append({
-                "ip": item["ipAddress"],
-            })
-        
-        events = await check_events(eventsIP)
-        return events
+            eventsIP = []
+            for item in data.get("data", []):
+                eventsIP.append({
+                    "ip": item["ipAddress"],
+                })
+            
+            events = await check_events(eventsIP)
+            return events
+    except httpx.HTTPError as e:
+        print(f"[ERROR] Failed due to {e}")
+        return None
     
 # function to scan for reports on each IP concurrently using AbuseIPDB /check endpoint
 async def check_events(eventsIP):
@@ -56,11 +59,11 @@ async def check_events(eventsIP):
                 resp.raise_for_status()
                 result = resp.json()["data"]
                 return {
-                    "ip": result["ipAddress"],
-                    "type": f"IPv{result.get('ipVersion', 4)}",
                     "source": "AbuseIPDB",
-                    "timestamp": result.get("lastReportedAt"),
-                    "geo": {
+                    "timestamp": datetime.fromisoformat(result.get("lastReportedAt")).isoformat(),
+                    "abuse_type": f"IPv{result.get('ipVersion', 4)}",
+                    "abuse_ip": result["ipAddress"],
+                    "abuse_geo": {
                         "countryCode": result.get("countryCode"),
                         "countryName": result.get("countryName"),
                         "usageType": result.get("usageType"),
@@ -68,16 +71,18 @@ async def check_events(eventsIP):
                         "domain": result.get("domain"),
                         "isTor": result.get("isTor"),
                     },
-                    "confidenceScore": result.get("abuseConfidenceScore"),
-                    "totalReports": result.get("totalReports"),
-                    "distinctUsers": result.get("numDistinctUsers"),
-                    "reports": result.get("reports", [])
+                    "abuse_confidenceScore": result.get("abuseConfidenceScore"),
+                    "abuse_totalReports": result.get("totalReports"),
+                    "abuse_distinctUsers": result.get("numDistinctUsers"),
+                    "abuse_reports": result.get("reports", [])[:5],
+                    "otx_name": None,
+                    "otx_description": None,
                 }
             except httpx.HTTPError as e:
                 print(f"[ERROR] Failed to fetch report for {ip}: {e}")
                 return None
 
-    tasks = [fetch_report(i["ip"]) for i in eventsIP]
+    tasks = [fetch_report(eventsIP[i]["ip"]) for i in range(10)]
     results = await asyncio.gather(*tasks)
     return [event for event in results if event]
 
