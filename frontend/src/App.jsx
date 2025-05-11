@@ -3,21 +3,26 @@ import React, { useState, useEffect } from 'react';
 import DeckGL from '@deck.gl/react';
 import { GeoJsonLayer, ArcLayer } from '@deck.gl/layers';
 import { COORDINATE_SYSTEM } from '@deck.gl/core';
+import { WebMercatorViewport } from '@deck.gl/core';
 import { countriesGeoJson } from './data/countries';
 import './App.css'
 
-const INITIAL_VIEW_STATE = {
-  longitude: 65,
-  latitude: 45,
-  zoom: 0.95,
-  pitch: 0,
-  bearing: 0
-};
+const WORLD_BOUNDS = [[-180, -60], [180, 85]];
+
+function getViewState() {
+  const { innerWidth: width, innerHeight: height } = window;
+  const { longitude, latitude, zoom } =
+        new WebMercatorViewport({ width, height })
+          .fitBounds(WORLD_BOUNDS, { padding: 20 });
+  return { longitude, latitude, zoom, pitch: 30, bearing: 0 };
+}
 
 export default function App() {
   const [arcs, setArcs] = useState([]);
   const [hoveredCountry, setHoveredCountry] = useState(null);
+  const [viewState] = useState(getViewState());
 
+  /* handing of event arcs */
   useEffect(() => {
     fetch('/events')
       .then(r => r.json())
@@ -38,6 +43,7 @@ export default function App() {
     console.log('hovered country:', info.object);
   };
 
+  /* define layer for the countries for interactive map */
   const countryLayer = new GeoJsonLayer({
     id: 'countries',
     data: countriesGeoJson,
@@ -59,6 +65,7 @@ export default function App() {
     lineWidthMinPixels: 0.5,
   });
 
+  /* layer for the arcs */
   const arcLayer = new ArcLayer({
     id: 'attack-arcs',
     data: arcs,
@@ -71,13 +78,13 @@ export default function App() {
   });
 
   return (
-    <div class="map-container">
+    <div className="map-container">
       <DeckGL
         style={{
-          position: 'absolute',
-          display: 'flex',
+          width: '100%',
+          height: '100%',
         }}
-        initialViewState={INITIAL_VIEW_STATE}
+        viewState={viewState}
         controller={false}
         interactiveLayerIds={['countries']}
         layers={[countryLayer, arcLayer]}
