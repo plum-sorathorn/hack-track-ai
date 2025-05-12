@@ -22,13 +22,5 @@ async def get_events(db=Depends(get_db)):
     result = await db.execute(select(Event).order_by(asc(Event.timestamp)).limit(50))
     events = result.scalars().all()
     return [e.__dict__ for e in events]
-
-@app.get("/test/otx")
-async def test_otx_pulses():
-    try:
-        pulses = await get_pulse_events()
-        return {"count": len(pulses), "data": pulses}
-    except Exception as e:
-        return {"error": str(e)}
     
 # END OF MAIN SERVER FUNCTIONS

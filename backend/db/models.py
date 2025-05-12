@@ -14,12 +14,9 @@ class Event(Base):
     timestamp = Column(String)
 
     # AbuseIPDB-specific
-    abuse_type = Column(String)
-    abuse_ip = Column(String, index=True)
-    abuse_geo = Column(JSON, nullable=True)
-    abuse_confidence_score = Column(Integer, nullable=True)
-    abuse_total_reports = Column(Integer, nullable=True)
-    abuse_distinct_users = Column(Integer, nullable=True)
+    abuse_attacker_country = Column(String, nullable=True)
+    abuse_victim_country = Column(String, nullable=True)
+    abuse_attack = Column(String, nullable=True)
     abuse_reports = Column(JSON, nullable=True)
 
     # OTX-specific

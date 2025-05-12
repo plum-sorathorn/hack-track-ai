@@ -17,13 +17,9 @@ def transform_otx_pulse(pulse):
     return {
         "source": "OTX",
         "timestamp": datetime.fromisoformat(pulse.get("modified")).isoformat(),
-        "abuse_type": pulse.get("type", "unknown"),
-        "abuse_ip": None,
-        "abuse_geo": {},
-        "abuse_confidence_score": None,
-        "abuse_total_reports": None,
-        "abuse_distinct_users": None,
-        "abuse_reports": None,
+        "abuse_attacker_country": None,
+        "abuse_victim_country": None,
+        "abuse_attack": None,
         "otx_name": pulse.get("name"),
         "otx_description": pulse.get("description"),
     }

@@ -1,89 +1,59 @@
-import os
-import httpx
-import asyncio
+import os, httpx, asyncio
 from datetime import datetime
 
 ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY")
-if not ABUSEIPDB_API_KEY:
-    raise RuntimeError("ABUSEIPDB_API_KEY environment variable is required")
-
 ABUSE_URL = "https://api.abuseipdb.com/api/v2/blacklist"
-
-
-headers = {
+CHECK_URL = "https://api.abuseipdb.com/api/v2/check"
+HEADERS = {
     "Key": ABUSEIPDB_API_KEY,
     "Accept": "application/json"
 }
 
-# function to obtain suspicious IPs
 async def get_abuseipdb_events(confidence_min=90):
-    params = {
-        "confidenceMinimum": confidence_min
-    }
-
+    params = {"confidenceMinimum": confidence_min}
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(ABUSE_URL, headers=headers, params=params)
+        async with httpx.AsyncClient(headers=HEADERS, timeout=30) as client:
+            resp = await client.get(ABUSE_URL, params=params)
             resp.raise_for_status()
-            data = resp.json()
-
-            eventsIP = []
-            for item in data.get("data", []):
-                eventsIP.append({
-                    "ip": item["ipAddress"],
-                })
-            
-            events = await check_events(eventsIP)
-            return events
+            data = resp.json().get("data", [])
+            ips = [item["ipAddress"] for item in data]
+            return await check_events(ips)
     except httpx.HTTPError as e:
-        print(f"[ERROR] Failed due to {e}")
-        return None
-    
-# function to scan for reports on each IP concurrently using AbuseIPDB /check endpoint
-async def check_events(eventsIP):
-    headers = {
-        "Key": ABUSEIPDB_API_KEY,
-        "Accept": "application/json"
-    }
+        print(f"[ERROR] AbuseIPDB blacklist fetch failed: {e}")
+        return []
 
-    async def fetch_report(ip):
-        url = "https://api.abuseipdb.com/api/v2/check"
-        params = {
-            "ipAddress": ip,
-            "maxAgeInDays": 1,
-            "verbose": "true"
-        }
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            try:
-                resp = await client.get(url, headers=headers, params=params)
-                resp.raise_for_status()
-                result = resp.json()["data"]
-                return {
-                    "source": "AbuseIPDB",
-                    "timestamp": datetime.fromisoformat(result.get("lastReportedAt")).isoformat(),
-                    "abuse_type": f"IPv{result.get('ipVersion', 4)}",
-                    "abuse_ip": result["ipAddress"],
-                    "abuse_geo": {
-                        "countryCode": result.get("countryCode"),
-                        "countryName": result.get("countryName"),
-                        "usageType": result.get("usageType"),
-                        "isp": result.get("isp"),
-                        "domain": result.get("domain"),
-                        "isTor": result.get("isTor"),
-                    },
-                    "abuse_confidence_score": result.get("abuseConfidenceScore"),
-                    "abuse_total_reports": result.get("totalReports"),
-                    "abuse_distinct_users": result.get("numDistinctUsers"),
-                    "abuse_reports": result.get("reports", [])[:5],
-                    "otx_name": None,
-                    "otx_description": None,
-                }
-            except httpx.HTTPError as e:
-                print(f"[ERROR] Failed to fetch report for {ip}: {e}")
-                return None
+async def check_events(ips: list[str]):
+    async with httpx.AsyncClient(headers=HEADERS, timeout=30) as client:
+        tasks = [fetch_report(client, ips[ip]) for ip in range(100)]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    tasks = [fetch_report(eventsIP[i]["ip"]) for i in range(10)]
-    results = await asyncio.gather(*tasks)
-    return [event for event in results if event]
+    flat = []
+    for res in results:
+        if isinstance(res, Exception):
+            continue
+        flat.extend(res)
+    return flat
 
-
+async def fetch_report(client: httpx.AsyncClient, ip: str):
+    params = {"ipAddress": ip, "maxAgeInDays": 1, "verbose": "true"}
+    try:
+        resp = await client.get(CHECK_URL, params=params)
+        resp.raise_for_status()
+        data = resp.json()["data"]
+        # only fetch up to 5 reports for each IP (for now)
+        reports = data.get("reports", [])[:5]
+        out = []
+        for rpt in reports:
+            out.append({
+                "source": "AbuseIPDB",
+                "timestamp": datetime.fromisoformat(data["lastReportedAt"]).isoformat(),
+                "abuse_attacker_country": data.get("countryName"),
+                "abuse_victim_country": rpt.get("reporterCountryName"),
+                "abuse_attack": rpt.get("comment"),
+                "otx_name": None,
+                "otx_description": None,
+            })
+        return out
+    except httpx.HTTPError as e:
+        print(f"[ERROR] Failed to fetch AbuseIPDB report for {ip}: {e}")
+        return []
