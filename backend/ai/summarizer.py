@@ -12,7 +12,7 @@ def summarize_event(event):
     prefix = textwrap.dedent("""\
         You're an AI created to log cyber attacks. The following attack
         may be a social engineering post, or may directly describe an attack.
-        Describe the attack in a general sense, within a single sentence of less than 25 words.
+        Describe the attack in layman terms, within a single sentence of less than 25 words.
         Sentence format: "A <attack> attack on <location/company> <description>".
         Attack:
     """)
