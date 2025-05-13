@@ -40,11 +40,70 @@
   color: #888;
 }
 
+/* Container for full-view split between map and logs */
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
 /* START OF MAP CSS */
 .map-container {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  background: transparent;
+  flex: 1;
+  position: relative;
+  left: 0;
+  top: 0;
+}
+
+/* floating site title on top of the map */
+.site-title {
+  position: absolute;
+  top: 4%;
+  left: 2%;
+  margin: 0;
+  padding: 0.3rem 0.9rem;
+  font-size: 1.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  background: var(--primary-soft);
+}
+
+/* END OF MAP CSS */
+
+/* START OF LOGS CSS */
+
+.logs-container {
+  position: absolute;
+  top: 10%; 
+  right: 0;
+  width: 340px;
+  padding: 20px 18px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.logs-title {
+  margin: 0 0 12px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--primary);
+  border-bottom: 1px solid var(--primary-soft);
+  padding-bottom: 6px;
+}
+
+/* individual log entry “cards” */
+.log-entry {
+  background: rgba(255, 0, 0, 0.257);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  margin-bottom: 12px;
+  transition: transform 0.2s ease;
+  opacity: 0.7;
+}
+
+.log-entry:hover {
+  transform: translateY(-2px);
+  opacity: 1;
 }
