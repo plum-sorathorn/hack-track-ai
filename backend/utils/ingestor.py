@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
     print("[INFO] Initializing database...")
     await init_db()
     otx_task = asyncio.create_task(fetch_otx_loop())
-    abuse_task = asyncio.create_task(fetch_abuseipdb_loop())
+    abuse_task = {}#asyncio.create_task(fetch_abuseipdb_loop())
 
     yield
 
