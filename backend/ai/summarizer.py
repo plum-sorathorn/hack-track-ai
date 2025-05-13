@@ -2,6 +2,8 @@
 
 import subprocess
 import textwrap
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 def summarize_event(event):
     """
