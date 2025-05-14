@@ -65,7 +65,7 @@
   font-size: 1.8rem;
   font-weight: 600;
   letter-spacing: 0.05em;
-  background: var(--primary-soft);
+  background: rgba(255, 4, 0, 0.20)
 }
 
 /* END OF MAP CSS */
@@ -93,7 +93,7 @@
 
 /* individual log entry “cards” */
 .log-entry {
-  background: rgba(255, 0, 0, 0.257);
+  background: rgba(0, 17, 255, 0.257);
   border-radius: 6px;
   padding: 10px 12px;
   font-size: 0.82rem;
