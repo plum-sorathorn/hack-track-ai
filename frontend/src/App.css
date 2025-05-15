@@ -4,106 +4,67 @@
   text-align: unset;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
-
-/* Container for full-view split between map and logs */
 .app-container {
   display: flex;
   height: 100vh;
   width: 100vw;
+  background: radial-gradient(circle at top left, #081a33 0%, #151e2d 100%);
 }
 
-/* START OF MAP CSS */
 .map-container {
   flex: 1;
   position: relative;
-  left: 0;
-  top: 0;
+  overflow: hidden;
 }
 
-/* floating site title on top of the map */
 .site-title {
   position: absolute;
-  top: 4%;
+  top: 3%;
   left: 2%;
-  margin: 0;
-  padding: 0.3rem 0.9rem;
-  font-size: 1.8rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  background: rgba(255, 4, 0, 0.20)
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  padding: 0.6rem 1.4rem;
+  background: rgba(0, 180, 255, 0.1);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 10px;
+  box-shadow: 0 0 4px var(--primary);
 }
-
-/* END OF MAP CSS */
-
-/* START OF LOGS CSS */
 
 .logs-container {
   position: absolute;
-  top: 10%; 
   right: 0;
-  width: 340px;
-  padding: 20px 18px;
-  box-sizing: border-box;
+  width: 20vw;
+  padding: 30px 24px;
+  backdrop-filter: blur(8px);
   overflow-y: auto;
 }
 
 .logs-title {
-  margin: 0 0 12px;
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: bold;
   color: var(--primary);
-  border-bottom: 1px solid var(--primary-soft);
-  padding-bottom: 6px;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--primary);
+  padding-bottom: 0.4rem;
+  text-transform: uppercase;
 }
 
-/* individual log entry “cards” */
 .log-entry {
-  background: rgba(0, 17, 255, 0.257);
+  background: rgba(0, 180, 255, 0.08);
+  border-left: 4px solid var(--primary);
   border-radius: 6px;
-  padding: 10px 12px;
-  font-size: 0.82rem;
-  line-height: 1.35;
-  margin-bottom: 12px;
-  transition: transform 0.2s ease;
-  opacity: 0.7;
+  padding: 12px 14px;
+  font-size: 0.8rem;
+  color: var(--text);
+  margin-bottom: 16px;
+  box-shadow: inset 0 0 6px rgba(0, 180, 255, 0.2);
+  transition: all 0.25s ease-in-out;
 }
 
 .log-entry:hover {
-  transform: translateY(-2px);
-  opacity: 1;
+  background: rgba(0, 180, 255, 0.15);
+  transform: scale(1.02);
+  box-shadow: 0 0 12px rgba(0, 180, 255, 0.3);
 }

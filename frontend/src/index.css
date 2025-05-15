@@ -1,28 +1,17 @@
 @font-face {
   font-family: 'Eightgon';
   src: url('/src/assets/Eightgon-OGn6p.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
 }
 
 :root {
   --bg-outer: #020414;
   --bg-inner: #0d1128;
-  --primary:  #0028ad;
-  --primary-soft: rgba(0, 89, 255, 0.20);
-  --text:     #eaf6ff;
+  --primary: #00b4ff;
+  --primary-soft: rgba(0, 180, 255, 0.2);
+  --text: #eaf6ff;
   --text-dim: #7ab8ff;
-  font-family: 'Eightgon', system-ui, sans-serif;
+  font-family: 'Orbitron', 'Eightgon', sans-serif;
   color: var(--text);
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
 }
 
 html, body, #root {
@@ -30,69 +19,29 @@ html, body, #root {
   padding: 0;
   width: 100%;
   height: 100%;
+  background: linear-gradient(to bottom right, #000d1a, #001f3f);
+  overflow: hidden;
 }
 
 body {
-  background-image: url('/src/assets/background.jpg');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  backdrop-filter: brightness(30%);
-  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-body::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
- }
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-a {
-  color: var(--primary);
-  text-decoration: none;
-}
-a:hover {
-  color: var(--text);
-}
 button {
   font-family: inherit;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
   font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: #001830;
+  color: var(--text);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: background-color 0.3s ease;
 }
 
 button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+  background-color: #002f60;
 }
