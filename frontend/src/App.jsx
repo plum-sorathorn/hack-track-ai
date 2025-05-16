@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import DeckGL from '@deck.gl/react';
 import { GeoJsonLayer, ArcLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { COORDINATE_SYSTEM, WebMercatorViewport } from '@deck.gl/core';
-import { countriesGeoJson } from './data/countries'; // Ensure this path is correct
+import { countriesGeoJson } from './data/countries';
 import { geoCentroid, geoDistance } from 'd3-geo';
+import { TransitionGroup, CSSTransition } from 'react-transition-group';
 import './App.css';
 
+/* View Initialization */
 const WORLD_BOUNDS = [[-20, -60], [190, 85]];
 function getViewState() {
   const { innerWidth: w, innerHeight: h } = window;
-  const { longitude, latitude, zoom } =
-    new WebMercatorViewport({ width: w, height: h }).fitBounds(WORLD_BOUNDS, { padding: 20 });
+  const { longitude, latitude, zoom } = new WebMercatorViewport({ width: w, height: h })
+    .fitBounds(WORLD_BOUNDS, { padding: 20 });
   return { longitude, latitude, zoom, pitch: 40, bearing: 0 };
 }
 
@@ -24,166 +26,106 @@ const useCountryCentroids = () =>
     () =>
       countriesGeoJson.features.map(f => ({
         name: f.properties?.NAME || '',
-        coord: geoCentroid(f),
+        coord: geoCentroid(f)
       })),
-    [],
+    []
   );
 
-const ARC_INTERVAL = 700; // Interval for new arcs
+/* Simulation */
+const EVENT_INTERVAL = 1000; // ms between simulated cyber‑events
+const ATTACK_TYPES = ['DDoS', 'Phishing', 'Malware', 'Brute-force', 'SQL injection'];
+const MAX_LOGS = 8
 
-// --- Animation Timing Constants ---
-const INITIAL_FLARE_FADE_IN_DURATION = 300; // Time for a flare to fade in
-const ARC_FADE_IN_DURATION = 700;         // Time for the arc to "travel" or fully appear
-const ELEMENT_FADE_OUT_DURATION = 500;    // Common fade out duration for all elements
+function generateSimulatedEvent(centroids) {
+  const attacker = centroids[Math.floor(Math.random() * centroids.length)];
+  let victim = attacker;
+  while (victim === attacker) {
+    victim = centroids[Math.floor(Math.random() * centroids.length)];
+  }
+  const type = ATTACK_TYPES[Math.floor(Math.random() * ATTACK_TYPES.length)];
+  const timestamp = Date.now();
+  return {
+    id: `${timestamp}-${Math.random()}`,
+    attacker,
+    victim,
+    type,
+    timestamp,
+    summary: `A ${type} attack from ${attacker.name} to ${victim.name}`
+  };
+}
 
-const ARC_START_DELAY_AFTER_INITIAL_FLARE = 100; // Arc visuals begin 100ms after initial flare starts fading in.
+/* Animation Timing */
+const INITIAL_FLARE_FADE_IN_DURATION = 300;
+const ARC_FADE_IN_DURATION = 700;
+const ELEMENT_FADE_OUT_DURATION = 500;
+const ARC_START_DELAY_AFTER_INITIAL_FLARE = 100;
 
-// --- Calculated Timings (relative to an event's t0, all in milliseconds) ---
-
-// Initial Flare (Flare 1 at source)
 const flare1_fadeInStartTime = 0;
 const flare1_fadeInEndTime = flare1_fadeInStartTime + INITIAL_FLARE_FADE_IN_DURATION;
-
-// Arc
 const arc_fadeInStartTime = flare1_fadeInStartTime + ARC_START_DELAY_AFTER_INITIAL_FLARE;
 const arc_fadeInEndTime = arc_fadeInStartTime + ARC_FADE_IN_DURATION;
-
-// Destination Flare (Flare 2 at destination)
-// This flare will start fading in before the arc completes and finish fading in exactly when the arc finishes.
 const flare2_fadeInStartTime = arc_fadeInEndTime - INITIAL_FLARE_FADE_IN_DURATION;
-const flare2_fadeInEndTime = arc_fadeInEndTime; // Flare 2 finishes appearing when arc finishes appearing
+const flare2_fadeInEndTime = arc_fadeInEndTime;
 
-// Hold Duration: Time all elements remain fully visible after the last one (Arc and Dest Flare) has fully appeared.
-const lastElementFullyAppearedTime = Math.max(flare1_fadeInEndTime, arc_fadeInEndTime, flare2_fadeInEndTime);
-const HOLD_DURATION_AFTER_ALL_APPEAR = 3000; // Hold for 3 seconds (adjust as needed)
-
-// Fade Out Start Times:
-// Elements start fading out after the hold period, maintaining the original appearance order.
+const lastElementFullyAppearedTime = Math.max(
+  flare1_fadeInEndTime,
+  arc_fadeInEndTime,
+  flare2_fadeInEndTime
+);
+const HOLD_DURATION_AFTER_ALL_APPEAR = 3000;
 const fadeOutPhaseGlobalStartTime = lastElementFullyAppearedTime + HOLD_DURATION_AFTER_ALL_APPEAR;
-
-// Individual fade out start times, offset from the global fade out start time
-const flare1_fadeOutStartTime = fadeOutPhaseGlobalStartTime + (flare1_fadeInStartTime - flare1_fadeInStartTime); // Effectively fadeOutPhaseGlobalStartTime
+const flare1_fadeOutStartTime = fadeOutPhaseGlobalStartTime;
 const arc_fadeOutStartTime = fadeOutPhaseGlobalStartTime + (arc_fadeInStartTime - flare1_fadeInStartTime);
 const flare2_fadeOutStartTime = fadeOutPhaseGlobalStartTime + (flare2_fadeInStartTime - flare1_fadeInStartTime);
-
-// Total Lifecycle Duration (for cleaning up arcs from state)
-// This is when the last element (Destination Flare, in this sequence) finishes fading out.
 const flare2_fadeOutEndTime = flare2_fadeOutStartTime + ELEMENT_FADE_OUT_DURATION;
-const TOTAL_LIFECYCLE_DURATION = flare2_fadeOutEndTime; // Max age of an arc visual
+const TOTAL_LIFECYCLE_DURATION = flare2_fadeOutEndTime;
 
-const easeInOutQuad = t => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+const easeInOutQuad = t => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
 
-// Helper function to calculate alpha based on lifecycle phases
 const getAlphaForLifecycle = (age, fadeInStartTime, fadeInDuration, fadeOutStartTime, fadeOutDuration) => {
-  // Before fade-in starts
-  if (age < fadeInStartTime) {
-    return 0;
-  }
-  // After fade-out ends
-  if (age >= fadeOutStartTime + fadeOutDuration) {
-    return 0;
-  }
-
-  // Fade In Phase
-  if (age >= fadeInStartTime && age < fadeInStartTime + fadeInDuration) {
+  if (age < fadeInStartTime) return 0;
+  if (age >= fadeOutStartTime + fadeOutDuration) return 0;
+  if (age < fadeInStartTime + fadeInDuration) {
     const progress = (age - fadeInStartTime) / fadeInDuration;
     return Math.round(255 * easeInOutQuad(progress));
   }
-
-  // Fully Visible Phase (between fade-in end and fade-out start)
-  if (age >= fadeInStartTime + fadeInDuration && age < fadeOutStartTime) {
-    return 255;
-  }
-
-  // Fade Out Phase
-  if (age >= fadeOutStartTime && age < fadeOutStartTime + fadeOutDuration) { // Condition was age < fadeOutStartTime + fadeOutDuration
-    const progress = (age - fadeOutStartTime) / fadeOutDuration;
-    return Math.round(255 * (1 - easeInOutQuad(progress)));
-  }
-  
-  return 0; // Default catch-all (should ideally be covered by above)
+  if (age < fadeOutStartTime) return 255;
+  const progress = (age - fadeOutStartTime) / fadeOutDuration;
+  return Math.round(255 * (1 - easeInOutQuad(progress)));
 };
 
-
-const arcAlphaAtAge = age => {
-  return getAlphaForLifecycle(
-    age,
-    arc_fadeInStartTime,
-    ARC_FADE_IN_DURATION,
-    arc_fadeOutStartTime,
-    ELEMENT_FADE_OUT_DURATION
-  );
-};
+const arcAlphaAtAge = age =>
+  getAlphaForLifecycle(age, arc_fadeInStartTime, ARC_FADE_IN_DURATION, arc_fadeOutStartTime, ELEMENT_FADE_OUT_DURATION);
 
 const flareAlphaAtAge = (age, type) => {
-  if (type === 'start') { // Source flare
-    return getAlphaForLifecycle(
-      age,
-      flare1_fadeInStartTime,
-      INITIAL_FLARE_FADE_IN_DURATION,
-      flare1_fadeOutStartTime,
-      ELEMENT_FADE_OUT_DURATION
-    );
-  } else if (type === 'end') { // Destination flare
-    return getAlphaForLifecycle(
-      age,
-      flare2_fadeInStartTime,
-      INITIAL_FLARE_FADE_IN_DURATION, // Assuming dest flare has same fade-in duration as initial
-      flare2_fadeOutStartTime,
-      ELEMENT_FADE_OUT_DURATION
-    );
+  if (type === 'start') {
+    return getAlphaForLifecycle(age, flare1_fadeInStartTime, INITIAL_FLARE_FADE_IN_DURATION, flare1_fadeOutStartTime, ELEMENT_FADE_OUT_DURATION);
   }
-  return 0;
+  return getAlphaForLifecycle(age, flare2_fadeInStartTime, INITIAL_FLARE_FADE_IN_DURATION, flare2_fadeOutStartTime, ELEMENT_FADE_OUT_DURATION);
 };
 
+/* Main Component */
 export default function App() {
   const centroids = useCountryCentroids();
   const [arcs, setArcs] = useState([]);
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState([]); // {id, text}
+  const logRefs = useRef(new Map());    // Map<id, React.RefObject<HTMLDivElement>>
 
+  /* Simulate incoming cyber‑events */
   useEffect(() => {
+    if (!centroids.length) return;
     const id = setInterval(() => {
-      const src = centroids[Math.floor(Math.random() * centroids.length)].coord;
-      let dst = src;
-      while (dst === src) {
-        dst = centroids[Math.floor(Math.random() * centroids.length)].coord;
-      }
-      setArcs(prev => {
-        const next = [...prev, { src, dst, t0: Date.now() }];
-        return next.slice(-10); // Keep up to 10 arcs, adjust as needed
+      const ev = generateSimulatedEvent(centroids);
+      setArcs(prev => [...prev, { src: ev.attacker.coord, dst: ev.victim.coord, t0: Date.now() }]);
+      setLogs(prev => {
+        const updated = [{ id: ev.id, text: ev.summary }, ...prev];
+        return updated.slice(0, MAX_LOGS);
       });
-    }, ARC_INTERVAL);
-
-    // Initial data fetching (example structure)
-    fetch('/events') // Replace with your actual API endpoint
-      .then(r => r.json())
-      .then(events => {
-        if (Array.isArray(events)) {
-            setArcs(
-                events.map(e => ({
-                  src: [e.abuse_geo?.longitude || 0, e.abuse_geo?.latitude || 0],
-                  dst: [0, 0], // Assuming a default destination or that your event data provides it
-                  t0: Date.now() - Math.random() * 1000, // Stagger initial events slightly
-                })).slice(-10) // Limit initial fetched arcs too
-              );
-        }
-      }
-      )
-      .catch(console.error);
-
-    fetch('/logs') // Replace with your actual API endpoint
-      .then(r => r.json?.() ?? [])
-      .then(setLogs)
-      .catch(() =>
-        setLogs([
-          'The threat log is warming up...',
-          'No recent attacks yet. Stay vigilant.',
-        ])
-      );
-
+    }, EVENT_INTERVAL);
     return () => clearInterval(id);
-  }, [centroids]); // Removed arcs from here to prevent potential re-fetch loops if not intended
+  }, [centroids]);
 
+  /* Animation clock */
   const [time, setTime] = useState(Date.now());
   useEffect(() => {
     let raf;
@@ -195,15 +137,15 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  /* Prune expired arcs */
   useEffect(() => {
-    // Cleanup arcs that have completed their lifecycle
     const cutoff = time - TOTAL_LIFECYCLE_DURATION;
-    if (arcs.some(a => a.t0 < cutoff)) { // Check if any arc is old enough to be removed
-        setArcs(prevArcs => prevArcs.filter(a => a.t0 >= cutoff));
+    if (arcs.some(a => a.t0 < cutoff)) {
+      setArcs(prev => prev.filter(a => a.t0 >= cutoff));
     }
-  }, [time, arcs]); // arcs dependency is needed here to react to changes in the arcs array
+  }, [time, arcs]);
 
-
+  /* Layers */
   const countryLayer = new GeoJsonLayer({
     id: 'countries',
     data: countriesGeoJson,
@@ -217,7 +159,7 @@ export default function App() {
     lineWidthMinPixels: 0.8,
     stroked: true,
     filled: true,
-    opacity: 0.9,
+    opacity: 0.9
   });
 
   const arcLayer = new ArcLayer({
@@ -235,12 +177,9 @@ export default function App() {
     getTargetColor: d => {
       const age = time - d.t0;
       const alpha = arcAlphaAtAge(age);
-      return [0, 150, 255, alpha * 0.1]; 
+      return [0, 150, 255, alpha * 0.1];
     },
-    updateTriggers: {
-      getSourceColor: time,
-      getTargetColor: time,
-    },
+    updateTriggers: { getSourceColor: time, getTargetColor: time }
   });
 
   const flareLayer = new ScatterplotLayer({
@@ -248,16 +187,10 @@ export default function App() {
     data: arcs.flatMap(d => {
       const age = time - d.t0;
       const flares = [];
-
-      const startFlareAlpha = flareAlphaAtAge(age, 'start');
-      if (startFlareAlpha > 0) {
-        flares.push({ position: d.src, alpha: startFlareAlpha, type: 'start' });
-      }
-
-      const endFlareAlpha = flareAlphaAtAge(age, 'end');
-      if (endFlareAlpha > 0) {
-        flares.push({ position: d.dst, alpha: endFlareAlpha, type: 'end' });
-      }
+      const startAlpha = flareAlphaAtAge(age, 'start');
+      if (startAlpha > 0) flares.push({ position: d.src, alpha: startAlpha, type: 'start' });
+      const endAlpha = flareAlphaAtAge(age, 'end');
+      if (endAlpha > 0) flares.push({ position: d.dst, alpha: endAlpha, type: 'end' });
       return flares;
     }),
     getPosition: d => d.position,
@@ -265,9 +198,7 @@ export default function App() {
     radiusMaxPixels: 8,
     getFillColor: d => [35, 92, 207, d.alpha],
     pickable: false,
-    updateTriggers: {
-      data: time
-    },
+    updateTriggers: { data: time }
   });
 
   return (
@@ -278,9 +209,9 @@ export default function App() {
           viewState={getViewState()}
           controller
           layers={[countryLayer, arcLayer, flareLayer]}
-          glOptions={{ alpha: true }} // Ensure GL context supports transparency
+          glOptions={{ alpha: true }}
           style={{
-            filter: 'drop-shadow(1px 1px 15px rgba(0,174,255,1))',
+            filter: 'drop-shadow(1px 1px 10px rgba(0,174,255,1))',
             width: '100%',
             height: '100%'
           }}
@@ -288,11 +219,28 @@ export default function App() {
       </div>
       <div className="logs-container">
         <h2 className="logs-title">Event Logs</h2>
-        {logs.map((entry, i) => (
-          <div key={i} className="log-entry">
-            {typeof entry === 'object' ? JSON.stringify(entry) : entry}
-          </div>
-        ))}
+        <TransitionGroup component={null}>
+          {logs.map(log => {
+            let ref = logRefs.current.get(log.id);
+            if (!ref) {
+              ref = React.createRef();
+              logRefs.current.set(log.id, ref);
+            }
+            return (
+              <CSSTransition
+                key={log.id}
+                nodeRef={ref}
+                timeout={300}
+                classNames="log"
+                onExited={() => logRefs.current.delete(log.id)}
+              >
+                <div ref={ref} className="log-entry">
+                  {log.text}
+                </div>
+              </CSSTransition>
+            );
+          })}
+        </TransitionGroup>
       </div>
     </div>
   );

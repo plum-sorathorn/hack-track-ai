@@ -68,3 +68,23 @@
   transform: scale(1.02);
   box-shadow: 0 0 12px rgba(0, 180, 255, 0.3);
 }
+
+.log-enter { 
+  opacity: 0; 
+  transform: translateY(-8px); 
+}
+.log-enter-active { 
+  opacity: 1; 
+  transform: translateY(0); 
+  transition: opacity 300ms ease, transform 300ms ease; 
+}
+
+.log-exit { 
+  opacity: 1; 
+  transform: translateY(0); 
+}
+.log-exit-active { 
+  opacity: 0; 
+  transform: translateY(8px); 
+  transition: opacity 300ms ease, transform 300ms ease; 
+}
