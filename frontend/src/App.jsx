@@ -8,11 +8,11 @@ import { TransitionGroup, CSSTransition } from 'react-transition-group';
 import './App.css';
 
 /* View Initialization */
-const WORLD_BOUNDS = [[-20, -60], [190, 85]];
+const WORLD_BOUNDS = [[200, -55], [-160, 85]];
 function getViewState() {
   const { innerWidth: w, innerHeight: h } = window;
   const { longitude, latitude, zoom } = new WebMercatorViewport({ width: w, height: h })
-    .fitBounds(WORLD_BOUNDS, { padding: 20 });
+    .fitBounds(WORLD_BOUNDS, { padding: 30 });
   return { longitude, latitude, zoom, pitch: 40, bearing: 0 };
 }
 
