@@ -32,7 +32,7 @@ const useCountryCentroids = () =>
   );
 
 /* Simulation */
-const EVENT_INTERVAL = 1000; // ms between simulated cyber‑events
+const EVENT_INTERVAL = 1500; // ms between simulated cyber‑events
 const ATTACK_TYPES = ['DDoS', 'Phishing', 'Malware', 'Brute-force', 'SQL injection'];
 const MAX_LOGS = 8
 
