@@ -64,22 +64,4 @@ async def fetch_abuseipdb_loop():
             await trim_event_table(db)
         await asyncio.sleep(60)  # 6 hours = 21600 seconds (will change to this in the future)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("[INFO] Initializing database...")
-    await init_db()
-    otx_task = asyncio.create_task(fetch_otx_loop())
-    abuse_task = {} #asyncio.create_task(fetch_abuseipdb_loop())
-
-    yield
-
-    for task in [otx_task, abuse_task]:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            print("[INFO] Fetch task cancelled")
-
-app = FastAPI(lifespan=lifespan)
-
 # END OF CONTINUOUS FUNCTIONS

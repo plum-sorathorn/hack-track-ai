@@ -10,7 +10,7 @@ if not OTX_API_KEY:
 
 BASE = "https://otx.alienvault.com/api/v1"
 PAGE_SIZE = 50
-MAX_PAGES = 1
+MAX_PAGES = 2
 
 # 🔧 Transform OTX pulse into a valid Event record
 def transform_otx_pulse(pulse):
@@ -41,7 +41,7 @@ async def get_pulse_events():
     headers = {"X-OTX-API-KEY": OTX_API_KEY}
     
     try:
-        async with httpx.AsyncClient(headers=headers, timeout=30.0) as client:
+        async with httpx.AsyncClient(headers=headers, timeout=60.0) as client:
             first_page_results, total_count = await fetch_page(client, page=1)
 
             total_pages = ceil(total_count / PAGE_SIZE)
@@ -65,5 +65,5 @@ async def get_pulse_events():
 
             return [transform_otx_pulse(p) for p in all_pulses]
     except Exception as e:
-        print(f"[ERROR] OTX fetch failed: {e}")
+        print(f"[ERROR] OTX FETCH FAILED: {e}")
         return []
