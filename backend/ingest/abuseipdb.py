@@ -52,6 +52,7 @@ async def fetch_report(client: httpx.AsyncClient, ip: str):
                 "abuse_attack": rpt.get("comment"),
                 "otx_name": None,
                 "otx_description": None,
+                "otx_country": None,
             })
         return out
     except httpx.HTTPError as e:

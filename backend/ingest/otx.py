@@ -22,6 +22,7 @@ def transform_otx_pulse(pulse):
         "abuse_attack": None,
         "otx_name": pulse.get("name"),
         "otx_description": pulse.get("description"),
+        "otx_country": (pulse.get("targeted_countries") or [None])[0]
     }
 
 async def fetch_page(client: httpx.AsyncClient, page: int):

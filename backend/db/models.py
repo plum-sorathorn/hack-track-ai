@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, JSON, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -21,3 +21,4 @@ class Event(Base):
     # OTX-specific
     otx_name = Column(String, nullable=True)
     otx_description = Column(String, nullable=True)
+    otx_country = Column(String, nullable=True)

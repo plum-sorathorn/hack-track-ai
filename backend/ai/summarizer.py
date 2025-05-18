@@ -39,7 +39,8 @@ async def summarize_event(event):
     if event.source == "OTX":
         detail = (
             f"Attack Name: {event.otx_name or 'Unknown'}\n"
-            f"Attack Description: {event.otx_description or 'No description provided'}"
+            f"Attack Description: {event.otx_description or 'No description provided'}\n"
+            f"Victim's Country: {event.otx_country or 'Unknown'}"
         )
     elif event.source == "AbuseIPDB":
         detail = (
@@ -70,20 +71,5 @@ async def summarize_event(event):
     
     return stdout.decode().strip()
 
-
 # def create_arc_json(event):
-#     prompt = f"""
-#         Create a JSON response with the following format:
-
-#         IP: {event['ip']}
-#         Type: {event['type']}
-#         Location: {event['geo']}
-#         Time: {event['timestamp']}
-#         Details: {event['details']}
-#         """
-#     result = subprocess.run(
-#         ['ollama', 'run', 'mistral'],
-#         input=prompt.encode(),
-#         stdout=subprocess.PIPE
-#     )
-#     return result.stdout.decode()
+    
