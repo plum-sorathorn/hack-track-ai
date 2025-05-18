@@ -18,7 +18,7 @@ function getViewState() {
 
 function arcHeight(src, dst) {
   const km = geoDistance(src, dst);
-  return Math.max(0, km * 0.2);
+  return Math.max(0, km * 0.25);
 }
 
 const useCountryCentroids = () =>
@@ -32,7 +32,7 @@ const useCountryCentroids = () =>
   );
 
 /* Simulation */
-const EVENT_INTERVAL = 1500; // ms between simulated cyber‑events
+const EVENT_INTERVAL = 1000; // ms between simulated cyber‑events
 const ATTACK_TYPES = ['DDoS', 'Phishing', 'Malware', 'Brute-force', 'SQL injection'];
 const MAX_LOGS = 8
 
@@ -55,9 +55,9 @@ function generateSimulatedEvent(centroids) {
 }
 
 /* Animation Timing */
-const INITIAL_FLARE_FADE_IN_DURATION = 300;
-const ARC_FADE_IN_DURATION = 700;
-const ELEMENT_FADE_OUT_DURATION = 500;
+const INITIAL_FLARE_FADE_IN_DURATION = 400;
+const ARC_FADE_IN_DURATION = 800;
+const ELEMENT_FADE_OUT_DURATION = 400;
 const ARC_START_DELAY_AFTER_INITIAL_FLARE = 100;
 
 const flare1_fadeInStartTime = 0;
@@ -72,7 +72,7 @@ const lastElementFullyAppearedTime = Math.max(
   arc_fadeInEndTime,
   flare2_fadeInEndTime
 );
-const HOLD_DURATION_AFTER_ALL_APPEAR = 3000;
+const HOLD_DURATION_AFTER_ALL_APPEAR = 3500;
 const fadeOutPhaseGlobalStartTime = lastElementFullyAppearedTime + HOLD_DURATION_AFTER_ALL_APPEAR;
 const flare1_fadeOutStartTime = fadeOutPhaseGlobalStartTime;
 const arc_fadeOutStartTime = fadeOutPhaseGlobalStartTime + (arc_fadeInStartTime - flare1_fadeInStartTime);
@@ -172,12 +172,12 @@ export default function App() {
     getSourceColor: d => {
       const age = time - d.t0;
       const alpha = arcAlphaAtAge(age);
-      return [0, 180, 255, alpha];
+      return [153, 225, 255, alpha];
     },
     getTargetColor: d => {
       const age = time - d.t0;
       const alpha = arcAlphaAtAge(age);
-      return [0, 150, 255, alpha * 0.1];
+      return [70, 104, 117, alpha * 0.1];
     },
     updateTriggers: { getSourceColor: time, getTargetColor: time }
   });
@@ -194,9 +194,9 @@ export default function App() {
       return flares;
     }),
     getPosition: d => d.position,
-    radiusMinPixels: 5,
-    radiusMaxPixels: 8,
-    getFillColor: d => [35, 92, 207, d.alpha],
+    radiusMinPixels: 4,
+    radiusMaxPixels: 4,
+    getFillColor: d => [54, 111, 133, d.alpha],
     pickable: false,
     updateTriggers: { data: time }
   });
