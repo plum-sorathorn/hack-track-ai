@@ -1,4 +1,5 @@
 import asyncio
+import json
 import textwrap
 
 # helper function to run mistral for summarization
@@ -71,5 +72,16 @@ async def summarize_event(event):
     
     return stdout.decode().strip()
 
-# def create_arc_json(event):
-    
+def create_arc_json(event):
+    country_coords = json.load(open("backend/utils/countries_centroids.json"))
+    src, dst = None, None
+
+    if event.source == "AbuseIPDB":
+        src = country_coords.get(event.abuse_attacker_country)
+        dst = country_coords.get(event.abuse_victim_country)
+    elif event.source == "OTX":
+        dst = country_coords.get(event.otx_country)
+    if not dst and not src:
+        return None
+
+    return {"src": src or [0, 0], "dst": dst}

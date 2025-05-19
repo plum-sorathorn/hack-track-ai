@@ -31,28 +31,7 @@ const useCountryCentroids = () =>
     []
   );
 
-/* Simulation */
-const EVENT_INTERVAL = 1000; // ms between simulated cyber‑events
-const ATTACK_TYPES = ['DDoS', 'Phishing', 'Malware', 'Brute-force', 'SQL injection'];
 const MAX_LOGS = 8
-
-function generateSimulatedEvent(centroids) {
-  const attacker = centroids[Math.floor(Math.random() * centroids.length)];
-  let victim = attacker;
-  while (victim === attacker) {
-    victim = centroids[Math.floor(Math.random() * centroids.length)];
-  }
-  const type = ATTACK_TYPES[Math.floor(Math.random() * ATTACK_TYPES.length)];
-  const timestamp = Date.now();
-  return {
-    id: `${timestamp}-${Math.random()}`,
-    attacker,
-    victim,
-    type,
-    timestamp,
-    summary: `A ${type} attack from ${attacker.name} to ${victim.name}`
-  };
-}
 
 /* Animation Timing */
 const INITIAL_FLARE_FADE_IN_DURATION = 400;
@@ -108,22 +87,56 @@ const flareAlphaAtAge = (age, type) => {
 export default function App() {
   const centroids = useCountryCentroids();
   const [arcs, setArcs] = useState([]);
-  const [logs, setLogs] = useState([]); // {id, text}
-  const logRefs = useRef(new Map());    // Map<id, React.RefObject<HTMLDivElement>>
+  const [logs, setLogs] = useState([]);
+  const logRefs = useRef(new Map());
 
-  /* Simulate incoming cyber‑events */
   useEffect(() => {
     if (!centroids.length) return;
-    const id = setInterval(() => {
-      const ev = generateSimulatedEvent(centroids);
-      setArcs(prev => [...prev, { src: ev.attacker.coord, dst: ev.victim.coord, t0: Date.now() }]);
-      setLogs(prev => {
-        const updated = [{ id: ev.id, text: ev.summary }, ...prev];
-        return updated.slice(0, MAX_LOGS);
-      });
-    }, EVENT_INTERVAL);
-    return () => clearInterval(id);
+
+    const fetchLiveLogs = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/logs');
+        const text = await res.text();
+        if (!text) return;
+
+        const data = JSON.parse(text);
+        if (!data.logs) return;
+
+        data.logs.forEach(([event, arc, summary]) => {
+          const t0 = Date.now();
+
+          if (arc && arc.src && arc.dst) {
+            setArcs(prev => [...prev, { src: arc.src, dst: arc.dst, t0 }]);
+          }
+
+          if (arc && JSON.stringify(arc.src) === JSON.stringify([0, 0]) && arc.dst) {
+            setArcs(prev => [...prev, { src: arc.dst, dst: arc.dst, t0 }]);
+          }
+
+          setLogs(prev => {
+            const newLog = {
+              id: `${t0}-${Math.random()}`,
+              text: summary,
+              meta: {
+                source: event.source,
+                attack: event.abuse_attack || event.otx_name,
+                timestamp: event.timestamp
+              }
+            };
+            return [newLog, ...prev].slice(0, MAX_LOGS);
+          });
+        });
+      } catch (err) {
+        console.error("Failed to fetch logs:", err);
+      }
+    };
+
+    const intervalId = setInterval(fetchLiveLogs, 10000);
+    fetchLiveLogs(); // Run immediately on mount
+
+    return () => clearInterval(intervalId); // Cleanup on unmount
   }, [centroids]);
+
 
   /* Animation clock */
   const [time, setTime] = useState(Date.now());
@@ -235,7 +248,10 @@ export default function App() {
                 onExited={() => logRefs.current.delete(log.id)}
               >
                 <div ref={ref} className="log-entry">
-                  {log.text}
+                  <div>{log.text}</div>
+                  <div style={{ fontSize: '0.7em', color: 'var(--text-dim)', marginTop: '0.2em' }}>
+                    {log.meta?.source} • {log.meta?.attack} • {new Date(log.meta?.timestamp).toLocaleString()}
+                  </div>
                 </div>
               </CSSTransition>
             );
