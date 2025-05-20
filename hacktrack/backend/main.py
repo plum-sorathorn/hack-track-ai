@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
 
     tasks = [
         asyncio.create_task(fetch_otx_loop()),
-        #asyncio.create_task(fetch_abuseipdb_loop()),
+        asyncio.create_task(fetch_abuseipdb_loop()),
         asyncio.create_task(summariser_loop()),
     ]
 
@@ -130,6 +130,7 @@ async def get_events(db=Depends(get_db)):
 async def get_logs():
     # just drain up to 50 most-recent summaries
     output = [log_and_arc_queue.popleft() for _ in range(min(50, len(log_and_arc_queue)))]
+
     return {"logs": output}
 
 # END OF API ENDPOINTS

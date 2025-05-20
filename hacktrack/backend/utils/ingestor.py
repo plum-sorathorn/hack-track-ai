@@ -42,7 +42,7 @@ async def fetch_otx_loop():
             await db.commit()
             print("[INFO] OTX EVENTS COMMITTED")
             await trim_event_table(db)
-        await asyncio.sleep(60)  # 1 hour = 3600 seconds (will change to this in the future)
+        await asyncio.sleep(3600)  # 1 hour = 3600 seconds (will change to this in the future)
 
 async def fetch_abuseipdb_loop():
     while True:
@@ -62,6 +62,6 @@ async def fetch_abuseipdb_loop():
             await db.commit()
             print("[INFO] AbuseIPDB EVENTS COMMITTED")
             await trim_event_table(db)
-        await asyncio.sleep(60)  # 6 hours = 21600 seconds (will change to this in the future)
+        await asyncio.sleep(21600)  # 6 hours = 21600 seconds (will change to this in the future)
 
 # END OF CONTINUOUS FUNCTIONS

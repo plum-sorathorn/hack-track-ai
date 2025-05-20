@@ -31,7 +31,10 @@ const useCountryCentroids = () =>
     []
   );
 
-const MAX_LOGS = 8
+// log and fetch timings
+const MAX_LOGS = 4
+const INTERVAL_FETCH = 20000;
+const INTERVAL_DRAIN = 1500;
 
 /* Animation Timing */
 const INITIAL_FLARE_FADE_IN_DURATION = 400;
@@ -85,57 +88,68 @@ const flareAlphaAtAge = (age, type) => {
 
 /* Main Component */
 export default function App() {
-  const centroids = useCountryCentroids();
-  const [arcs, setArcs] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [arcs, setArcs] = useState([]);
+  const centroids = useCountryCentroids();
+  const logQueue = useRef([]);
   const logRefs = useRef(new Map());
 
+  // Fetch logs periodically and add to queue
   useEffect(() => {
-    if (!centroids.length) return;
 
     const fetchLiveLogs = async () => {
       try {
         const res = await fetch('http://localhost:8000/logs');
+        console.log("Fetching Logs")
         const text = await res.text();
         if (!text) return;
-
         const data = JSON.parse(text);
         if (!data.logs) return;
 
-        data.logs.forEach(([event, arc, summary]) => {
-          const t0 = Date.now();
-
-          if (arc && arc.src && arc.dst) {
-            setArcs(prev => [...prev, { src: arc.src, dst: arc.dst, t0 }]);
-          }
-
-          if (arc && JSON.stringify(arc.src) === JSON.stringify([0, 0]) && arc.dst) {
-            setArcs(prev => [...prev, { src: arc.dst, dst: arc.dst, t0 }]);
-          }
-
-          setLogs(prev => {
-            const newLog = {
-              id: `${t0}-${Math.random()}`,
-              text: summary,
-              meta: {
-                source: event.source,
-                attack: event.abuse_attack || event.otx_name,
-                timestamp: event.timestamp
-              }
-            };
-            return [newLog, ...prev].slice(0, MAX_LOGS);
-          });
-        });
+        logQueue.current.push(...data.logs);
       } catch (err) {
         console.error("Failed to fetch logs:", err);
       }
     };
 
-    const intervalId = setInterval(fetchLiveLogs, 10000);
-    fetchLiveLogs(); // Run immediately on mount
+    const fetchInterval = setInterval(fetchLiveLogs, INTERVAL_FETCH);
+    fetchLiveLogs(); // run once immediately
 
-    return () => clearInterval(intervalId); // Cleanup on unmount
+    return () => clearInterval(fetchInterval);
   }, [centroids]);
+
+  // Drain queue and add entries one by one
+  useEffect(() => {
+    const drainInterval = setInterval(() => {
+      if (logQueue.current.length === 0) return;
+
+      const [event, arc, summary] = logQueue.current.shift();
+      const t0 = Date.now();
+
+      // Add arc
+      if (arc && JSON.stringify(arc.src) === JSON.stringify([0, 0]) && arc.dst) {
+        setArcs(prev => [...prev, { src: arc.dst, dst: arc.dst, t0 }]);
+      } else if (arc && arc.src && arc.dst) {
+        setArcs(prev => [...prev, { src: arc.src, dst: arc.dst, t0 }]);
+      } 
+
+      // Add log
+      setLogs(prev => {
+        const newLog = {
+          id: `${t0}-${Math.random()}`,
+          text: summary,
+          meta: {
+            source: event.source,
+            attack: event.abuse_attack || event.otx_name,
+            timestamp: event.timestamp
+          }
+        };
+        return [newLog, ...prev].slice(0, MAX_LOGS);
+      });
+    }, INTERVAL_DRAIN);
+
+    return () => clearInterval(drainInterval);
+  }, []);
 
 
   /* Animation clock */
@@ -200,16 +214,46 @@ export default function App() {
     data: arcs.flatMap(d => {
       const age = time - d.t0;
       const flares = [];
-      const startAlpha = flareAlphaAtAge(age, 'start');
-      if (startAlpha > 0) flares.push({ position: d.src, alpha: startAlpha, type: 'start' });
-      const endAlpha = flareAlphaAtAge(age, 'end');
-      if (endAlpha > 0) flares.push({ position: d.dst, alpha: endAlpha, type: 'end' });
+
+      const hasRealSrc = d.src && (d.src[0] !== 0 || d.src[1] !== 0);
+      const hasRealDst = d.dst && (d.dst[0] !== 0 || d.dst[1] !== 0);
+
+      if (hasRealSrc) {
+        const startAlpha = flareAlphaAtAge(age, 'start');
+        if (startAlpha > 0) flares.push({ position: d.src, alpha: startAlpha, type: 'start', scale: 1 });
+      }
+
+      if (hasRealDst) {
+        const endAlpha = flareAlphaAtAge(age, 'end');
+        if (endAlpha > 0) {
+          const scale = hasRealSrc ? 1 : 4; // make bigger if it's "flare only"
+          flares.push({ position: d.dst, alpha: endAlpha, type: 'end', scale });
+        }
+      }
+
+      // NEW: If both are null or [0,0], show large ambient flare at center of map
+      if (!hasRealSrc && !hasRealDst) {
+        const ambientAlpha = flareAlphaAtAge(age, 'end'); // reuse fade logic
+        if (ambientAlpha > 0) {
+          flares.push({
+            position: [0, 20], // center longitude, equator-ish
+            alpha: ambientAlpha * 0.4,
+            type: 'ambient',
+            scale: 6
+          });
+        }
+      }
+
       return flares;
     }),
     getPosition: d => d.position,
-    radiusMinPixels: 4,
-    radiusMaxPixels: 4,
-    getFillColor: d => [54, 111, 133, d.alpha],
+    radiusMinPixels: 6,
+    radiusMaxPixels: 6,
+    getRadius: d => d.scale * 6,
+    getFillColor: d => {
+      if (d.type === 'ambient') return [0, 174, 255, d.alpha]; // stronger blue
+      return [54, 111, 133, d.alpha];
+    },
     pickable: false,
     updateTriggers: { data: time }
   });
