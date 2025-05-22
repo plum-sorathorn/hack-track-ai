@@ -24,7 +24,7 @@ async def get_abuseipdb_events(confidence_min=90):
 
 async def check_events(ips: list[str]):
     async with httpx.AsyncClient(headers=HEADERS, timeout=30) as client:
-        tasks = [fetch_report(client, ips[ip]) for ip in range(100)]
+        tasks = [fetch_report(client, ips[ip]) for ip in range(100)] # only 100 ips' for now, will increase with testing
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
     flat = []
