@@ -1,12 +1,8 @@
 import asyncio
-from datetime import datetime
 from backend.db.session import get_db
 from backend.db.models import Event
-from backend.db.init import init_db
 from backend.ingest.otx import get_pulse_events
 from backend.ingest.abuseipdb import get_abuseipdb_events
-from fastapi import FastAPI
-from fastapi.concurrency import asynccontextmanager
 from sqlalchemy import select, delete, asc
 
 
@@ -42,7 +38,7 @@ async def fetch_otx_loop():
             await db.commit()
             print("[INFO] OTX EVENTS COMMITTED")
             await trim_event_table(db)
-        await asyncio.sleep(3600)  # 1 hour = 3600 seconds (will change to this in the future)
+        await asyncio.sleep(1800)  # 30 mins = 1800 seconds (may make this more frequent)
 
 async def fetch_abuseipdb_loop():
     while True:
@@ -62,6 +58,6 @@ async def fetch_abuseipdb_loop():
             await db.commit()
             print("[INFO] AbuseIPDB EVENTS COMMITTED")
             await trim_event_table(db)
-        await asyncio.sleep(21600)  # 6 hours = 21600 seconds (will change to this in the future)
+        await asyncio.sleep(21600)  # 6 hours = 21600 seconds (can only call 5 times a day due to free tier)
 
 # END OF CONTINUOUS FUNCTIONS
