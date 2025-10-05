@@ -10,9 +10,9 @@ import './App.css';
 /* View Initialization */
 
 const INITIAL_VIEW_STATE = {
-  longitude: 0,
+  longitude: 25,
   latitude: 25,
-  zoom: 1.1,
+  zoom: 0.9,
   pitch: 40,
   bearing: 0,
   minZoom: 5,
@@ -257,7 +257,7 @@ export default function App() {
     updateTriggers: { getSourceColor: time, getTargetColor: time }
   });
 
-  /* Flare Layer — white endpoint glows */
+  /* Flare Layer – white endpoint glows */
   const flareLayer = new ScatterplotLayer({
     id: 'endpoint-flares',
     data: arcs.flatMap(d => {
@@ -265,28 +265,65 @@ export default function App() {
       const flares = [];
       const hasRealSrc = d.src && (d.src[0] !== 0 || d.src[1] !== 0);
       const hasRealDst = d.dst && (d.dst[0] !== 0 || d.dst[1] !== 0);
+      const isSelfAttack = hasRealSrc && hasRealDst && 
+        Math.abs(d.src[0] - d.dst[0]) < 0.01 && 
+        Math.abs(d.src[1] - d.dst[1]) < 0.01;
 
-      if (hasRealSrc) {
+      if (hasRealSrc && !isSelfAttack) {
         const startAlpha = flareAlphaAtAge(age, 'start');
-        if (startAlpha > 0) flares.push({ position: d.src, alpha: startAlpha, type: 'start', scale: 1 });
+        if (startAlpha > 0) {
+          // Animate scale during fade-in
+          let animScale = 1;
+          if (age < flare1_fadeInEndTime) {
+            const fadeProgress = Math.min(1, (age - flare1_fadeInStartTime) / INITIAL_FLARE_FADE_IN_DURATION);
+            animScale = 0.3 + (easeInOutQuad(fadeProgress) * 0.7); // Grow from 0.3 to 1
+          }
+          flares.push({ position: d.src, alpha: startAlpha, type: 'start', scale: animScale, age });
+        }
       }
 
       if (hasRealDst) {
         const endAlpha = flareAlphaAtAge(age, 'end');
         if (endAlpha > 0) {
-          const scale = hasRealSrc ? 1 : 4;
-          flares.push({ position: d.dst, alpha: endAlpha, type: 'end', scale });
+          if (isSelfAttack) {
+            const pulseSpeed = 0.003;
+            const pulsePhase = (age * pulseSpeed) % (Math.PI * 2);
+            const pulseScale = 2.5 + Math.sin(pulsePhase) * 1.2;
+            flares.push({ 
+              position: d.dst, 
+              alpha: endAlpha, 
+              type: 'self-attack', 
+              scale: pulseScale,
+              age 
+            });
+          } else {
+            let baseScale = hasRealSrc ? 1 : 4;
+            // Animate scale during fade-in for end flare
+            if (age < flare2_fadeInEndTime) {
+              const fadeProgress = Math.min(1, (age - flare2_fadeInStartTime) / INITIAL_FLARE_FADE_IN_DURATION);
+              const growFactor = 0.3 + (easeInOutQuad(fadeProgress) * 0.7);
+              baseScale *= growFactor;
+            }
+            flares.push({ position: d.dst, alpha: endAlpha, type: 'end', scale: baseScale, age });
+          }
         }
       }
 
       if (!hasRealSrc && !hasRealDst) {
         const ambientAlpha = flareAlphaAtAge(age, 'end');
         if (ambientAlpha > 0) {
+          let ambientScale = 6;
+          // Animate ambient flare growth
+          if (age < flare2_fadeInEndTime) {
+            const fadeProgress = Math.min(1, (age - flare2_fadeInStartTime) / INITIAL_FLARE_FADE_IN_DURATION);
+            ambientScale *= (0.5 + easeInOutQuad(fadeProgress) * 0.5);
+          }
           flares.push({
             position: [0, 20],
             alpha: ambientAlpha * 0.4,
             type: 'ambient',
-            scale: 6
+            scale: ambientScale,
+            age
           });
         }
       }
@@ -294,15 +331,23 @@ export default function App() {
       return flares;
     }),
     getPosition: d => d.position,
-    radiusMinPixels: 4,
-    radiusMaxPixels: 6,
-    getRadius: d => d.scale,
+    radiusUnits: 'pixels',
+    getRadius: d => {
+      // Base radius in pixels for each type
+      const baseRadius = d.type === 'self-attack' ? 2 : 
+                        d.type === 'ambient' ? 6 : 
+                        d.type === 'end' ? 5 : 5;
+      return baseRadius * d.scale;
+    },
     getFillColor: d => {
-      if (d.type === 'ambient') return [255, 255, 255, d.alpha * 0.6]; // glowing white
+      if (d.type === 'self-attack') {
+        return [240, 245, 255, d.alpha * 0.7];
+      }
+      if (d.type === 'ambient') return [255, 255, 255, d.alpha * 0.6];
       return [220, 220, 220, d.alpha * 0.4];
     },
     pickable: false,
-    updateTriggers: { data: time }
+    updateTriggers: { data: time, getFillColor: time, getRadius: time }
   });
 
   return (
