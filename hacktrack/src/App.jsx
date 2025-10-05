@@ -8,14 +8,20 @@ import { TransitionGroup, CSSTransition } from 'react-transition-group';
 import './App.css';
 
 /* View Initialization */
-const WORLD_BOUNDS = [[200, -55], [-160, 85]];
-function getViewState() {
-  const { innerWidth: w, innerHeight: h } = window;
-  const { longitude, latitude, zoom } = new WebMercatorViewport({ width: w, height: h })
-    .fitBounds(WORLD_BOUNDS, { padding: 30 });
-  return { longitude, latitude, zoom, pitch: 40, bearing: 0 };
-}
 
+const INITIAL_VIEW_STATE = {
+  longitude: 0,
+  latitude: 25,
+  zoom: 1.1,
+  pitch: 40,
+  bearing: 0,
+  minZoom: 5,
+  maxZoom: 10
+};
+
+function getViewState() {
+  return INITIAL_VIEW_STATE;
+}
 function arcHeight(src, dst) {
   const km = geoDistance(src, dst);
   return Math.max(0, km * 0.25);
@@ -86,6 +92,25 @@ const flareAlphaAtAge = (age, type) => {
   return getAlphaForLifecycle(age, flare2_fadeInStartTime, INITIAL_FLARE_FADE_IN_DURATION, flare2_fadeOutStartTime, ELEMENT_FADE_OUT_DURATION);
 };
 
+// arc simulation for now:
+const generateRandomArcs = (centroids, count = 1) => {
+  const now = Date.now();
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    const srcCentroid = centroids[Math.floor(Math.random() * centroids.length)];
+    // 1 in 4 chance of a self-attack for demo purposes
+    const isSelfAttack = Math.random() < 0.25;
+    const dstCentroid = isSelfAttack ? srcCentroid : centroids[Math.floor(Math.random() * centroids.length)];
+
+    result.push({
+      src: srcCentroid.coord,
+      dst: dstCentroid.coord,
+      t0: now
+    });
+  }
+  return result;
+};
+
 /* Main Component */
 export default function App() {
   const [logs, setLogs] = useState([]);
@@ -94,28 +119,50 @@ export default function App() {
   const logQueue = useRef([]);
   const logRefs = useRef(new Map());
 
-  // Fetch logs periodically and add to queue
+  // // Fetch logs periodically and add to queue
+  // useEffect(() => {
+
+  //   const fetchLiveLogs = async () => {
+  //     try {
+  //       const res = await fetch('http://localhost:8000/logs');
+  //       console.log("Fetching Logs")
+  //       const text = await res.text();
+  //       if (!text) return;
+  //       const data = JSON.parse(text);
+  //       if (!data.logs) return;
+
+  //       logQueue.current.push(...data.logs);
+  //     } catch (err) {
+  //       console.error("Failed to fetch logs:", err);
+  //     }
+  //   };
+
+  //   const fetchInterval = setInterval(fetchLiveLogs, INTERVAL_FETCH);
+  //   fetchLiveLogs(); // run once immediately
+
+  //   return () => clearInterval(fetchInterval);
+  // }, [centroids]);
+
+  // placeholder for fetch logs function
   useEffect(() => {
+    const generateRandomArcsInterval = setInterval(() => {
+      const newArcs = generateRandomArcs(centroids, 1); // Generate 1 random arc
+      setArcs(prev => [...prev, ...newArcs]);
 
-    const fetchLiveLogs = async () => {
-      try {
-        const res = await fetch('http://localhost:8000/logs');
-        console.log("Fetching Logs")
-        const text = await res.text();
-        if (!text) return;
-        const data = JSON.parse(text);
-        if (!data.logs) return;
+      // Optionally, generate a random log entry for each arc
+      const newLog = {
+        id: `${Date.now()}-${Math.random()}`,
+        text: `Simulated attack from ${newArcs[0].src} to ${newArcs[0].dst}`,
+        meta: {
+          source: 'Simulated',
+          attack: 'Simulated Attack',
+          timestamp: Date.now(),
+        },
+      };
+      setLogs(prev => [newLog, ...prev].slice(0, MAX_LOGS));
+    }, 1000);
 
-        logQueue.current.push(...data.logs);
-      } catch (err) {
-        console.error("Failed to fetch logs:", err);
-      }
-    };
-
-    const fetchInterval = setInterval(fetchLiveLogs, INTERVAL_FETCH);
-    fetchLiveLogs(); // run once immediately
-
-    return () => clearInterval(fetchInterval);
+    return () => clearInterval(generateRandomArcsInterval);
   }, [centroids]);
 
   // Drain queue and add entries one by one
@@ -172,7 +219,7 @@ export default function App() {
     }
   }, [time, arcs]);
 
-  /* Layers */
+  /* Country Layer — bright outlines on dark map */
   const countryLayer = new GeoJsonLayer({
     id: 'countries',
     data: countriesGeoJson,
@@ -180,15 +227,16 @@ export default function App() {
     coordinateSystem: COORDINATE_SYSTEM.LNGLAT,
     pickable: true,
     autoHighlight: true,
-    highlightColor: [0, 180, 255, 160],
-    getFillColor: [0, 0, 0, 0],
-    getLineColor: [255, 255, 255, 200],
+    highlightColor: [230, 230, 230, 180], // light gray-white highlight
+    getFillColor: [0, 0, 0, 0], // transparent
+    getLineColor: [200, 200, 200, 220], // subtle white-gray outline
     lineWidthMinPixels: 0.8,
     stroked: true,
     filled: true,
     opacity: 0.9
   });
 
+  /* Arc Layer — white fading arcs */
   const arcLayer = new ArcLayer({
     id: 'attack-arcs',
     data: arcs,
@@ -199,22 +247,22 @@ export default function App() {
     getSourceColor: d => {
       const age = time - d.t0;
       const alpha = arcAlphaAtAge(age);
-      return [153, 225, 255, alpha];
+      return [255, 255, 255, alpha];
     },
     getTargetColor: d => {
       const age = time - d.t0;
       const alpha = arcAlphaAtAge(age);
-      return [70, 104, 117, alpha * 0.1];
+      return [180, 180, 180, alpha * 0.3];
     },
     updateTriggers: { getSourceColor: time, getTargetColor: time }
   });
 
+  /* Flare Layer — white endpoint glows */
   const flareLayer = new ScatterplotLayer({
     id: 'endpoint-flares',
     data: arcs.flatMap(d => {
       const age = time - d.t0;
       const flares = [];
-
       const hasRealSrc = d.src && (d.src[0] !== 0 || d.src[1] !== 0);
       const hasRealDst = d.dst && (d.dst[0] !== 0 || d.dst[1] !== 0);
 
@@ -226,17 +274,16 @@ export default function App() {
       if (hasRealDst) {
         const endAlpha = flareAlphaAtAge(age, 'end');
         if (endAlpha > 0) {
-          const scale = hasRealSrc ? 1 : 4; // make bigger if it's "flare only"
+          const scale = hasRealSrc ? 1 : 4;
           flares.push({ position: d.dst, alpha: endAlpha, type: 'end', scale });
         }
       }
 
-      // NEW: If both are null or [0,0], show large ambient flare at center of map
       if (!hasRealSrc && !hasRealDst) {
-        const ambientAlpha = flareAlphaAtAge(age, 'end'); // reuse fade logic
+        const ambientAlpha = flareAlphaAtAge(age, 'end');
         if (ambientAlpha > 0) {
           flares.push({
-            position: [0, 20], // center longitude, equator-ish
+            position: [0, 20],
             alpha: ambientAlpha * 0.4,
             type: 'ambient',
             scale: 6
@@ -247,12 +294,12 @@ export default function App() {
       return flares;
     }),
     getPosition: d => d.position,
-    radiusMinPixels: 6,
+    radiusMinPixels: 4,
     radiusMaxPixels: 6,
-    getRadius: d => d.scale * 6,
+    getRadius: d => d.scale,
     getFillColor: d => {
-      if (d.type === 'ambient') return [0, 174, 255, d.alpha]; // stronger blue
-      return [54, 111, 133, d.alpha];
+      if (d.type === 'ambient') return [255, 255, 255, d.alpha * 0.6]; // glowing white
+      return [220, 220, 220, d.alpha * 0.4];
     },
     pickable: false,
     updateTriggers: { data: time }
