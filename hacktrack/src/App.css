@@ -1,137 +1,120 @@
-#root {
+:root {
+  /* Minimalistic Dark Theme (inverted from light) */
+  --bg-black: #0d0d0d;
+  --bg-dark-gray: #1a1a1a;
+  --bg-gray: #2b2b2b;
+  --text-white: #ffffff;
+  --text-dim: #cccccc;
+  --text-bright: #f5f5f5;
+  --accent-light: #e0e0e0;
+  --accent-dim: #555555;
+  --shadow: 0 2px 12px rgba(255, 255, 255, 0.05);
+}
+
+body {
   margin: 0;
   padding: 0;
-  text-align: unset;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-black);
+  color: var(--text-white);
+  overflow: hidden;
 }
 
+/* Layout */
 .app-container {
   display: flex;
+  flex-direction: row;
   height: 100vh;
   width: 100vw;
-  background: radial-gradient(ellipse at 70% 20%, var(--bg-inner) 0%, var(--bg-outer) 100%);
-  font-family: "Orbitron", "Eightgon", sans-serif;
-  color: var(--text);
 }
-
 
 .map-container {
   flex: 1;
   position: relative;
+  background-color: var(--bg-black);
 }
 
+.logs-container {
+  width: 350px;
+  padding: 1rem;
+  background-color: var(--bg-dark-gray);
+  border-left: 1px solid var(--bg-gray);
+  box-shadow: var(--shadow);
+  overflow-y: auto;
+}
+
+/* Typography */
 .site-title {
   position: absolute;
   top: 1rem;
   left: 1rem;
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: .06em;
-  color: var(--primary);
-  text-shadow: 0 0 8px var(--primary-soft);
-  user-select: none;
-}
-
-.logs-container {
-  width: 320px;
-  max-width: 36%;
-  backdrop-filter: blur(10px) saturate(140%);
-  background: rgba(8, 16, 32, .55);
-  border-left: 1px solid var(--primary-soft);
-  padding: 1.25rem 1rem 2rem;
-  overflow-y: auto;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--text-white);
+  z-index: 100;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 .logs-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: .12em;
-  color: var(--text-dim);
-  margin-bottom: 1rem;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--primary-soft);
-  padding-bottom: .4rem;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-bright);
+  margin-bottom: 0.8rem;
+  border-bottom: 1px solid var(--accent-dim);
+  padding-bottom: 0.5rem;
 }
 
-/* individual log entry "cards" */
+/* Logs */
 .log-entry {
-  background: rgba(255, 255, 255, .02);
-  border: 1px solid var(--primary-soft);
+  background-color: var(--bg-gray);
   border-radius: 6px;
-  padding: .6rem .75rem;
-  font-size: .78rem;
-  line-height: 1.35;
-  margin-bottom: .75rem;
-  transition: transform .18s ease, box-shadow .18s ease;
+  padding: 0.8rem;
+  margin-bottom: 0.6rem;
+  box-shadow: var(--shadow);
+  transition: all 0.3s ease;
 }
 
-.log-entry:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 180, 255, .18);
-  background: rgba(0, 30, 82, 0.425);
+.log-entry > div:first-child {
+  font-size: 0.9rem;
+  color: var(--text-white);
+  margin-bottom: 0.3rem;
 }
 
-/* thin custom scrollbar (WebKit) */
-.logs-container::-webkit-scrollbar {
-  width: 6px;
-}
-.logs-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-.logs-container::-webkit-scrollbar-thumb {
-  background: var(--primary-soft);
-  border-radius: 3px;
+.log-entry > div:last-child {
+  font-size: 0.7rem;
+  color: var(--text-dim);
 }
 
-.log-enter { 
-  opacity: 0; 
-  transform: translateY(-8px); 
-}
-.log-enter-active { 
-  opacity: 1; 
-  transform: translateY(8px); 
-  transition: opacity 300ms ease, transform 300ms ease; 
+/* Animations */
+.log-enter {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
-.log-exit { 
-  opacity: 1; 
-  transform: translateY(8px); 
-}
-.log-exit-active { 
-  opacity: 0; 
-  transform: translateY(8px); 
-  transition: opacity 500ms ease, transform 300ms ease; 
+.log-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
+.log-exit {
+  opacity: 1;
+}
 
-/* mobile support */
-@media screen and (max-width: 768px) {
-  /* stack items vertically instead of side-by-side */
-  .app-container {
-    flex-direction: column;
-    height: 100vh;
-  }
+.log-exit-active {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
 
-  /* map occupies the top half */
-  .map-container {
-    width: 100%;
-    flex: 0 0 40vh;
-    height: 40vh;
-  }
+/* DeckGL Overrides */
+.map-container .deckgl-wrapper {
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.1));
+}
 
-  /* logs occupy the bottom half */
-  .logs-container {
-    position: relative;
-    width: 90%;
-    flex: 1 1 60vh;
-    height: 60vh;
-    padding: 24px 18px;
-    overflow-y: hidden;
-  }
-
-  .site-title {
-    top: 1rem;
-    left: 1rem;
-    font-size: 1rem;
-    padding: 0.4rem 1rem;
-  }
+/* Flare pop (white glow burst) */
+@keyframes pulseFlare {
+  0%   { transform: scale(0.5); opacity: 0.5; }
+  40%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.8; }
 }
