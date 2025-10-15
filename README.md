@@ -1,6 +1,6 @@
 # HackTrackAI
 
-**HackTrackAI** is a fully deployed, AI-powered **cyber threat intelligence visualization platform** that tracks and summarizes global cyberattacks in real time.
+**HackTrackAI** is an AI-powered **cyber threat intelligence visualization platform** that tracks and summarizes global cyberattacks in real time.
 
 The platform integrates:
 - A **FastAPI backend** that continuously ingests live threat intelligence from **AbuseIPDB** and **AlienVault OTX** public APIs.  
