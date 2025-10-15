@@ -1,6 +1,8 @@
 import asyncio
 from collections import deque
 import traceback
+import random
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends
@@ -29,6 +31,123 @@ log_and_arc_queue: deque[str] = deque(maxlen=500)
 from fastapi.middleware.cors import CORSMiddleware
 
 # START OF HELPER FUNCTIONS 
+
+# Simulated attack data
+ATTACK_TYPES = [
+    "SQL Injection",
+    "DDoS Attack",
+    "Brute Force Login",
+    "Port Scan",
+    "Malware Distribution",
+    "Phishing Campaign",
+    "XSS Attack",
+    "Ransomware",
+    "Cryptojacking",
+    "Data Exfiltration"
+]
+
+COUNTRIES = [
+    "United States", "China", "Russia", "Brazil", "India",
+    "Germany", "United Kingdom", "France", "Japan", "South Korea",
+    "Canada", "Australia", "Netherlands", "Singapore", "Israel"
+]
+
+ATTACK_DESCRIPTIONS = {
+    "SQL Injection": [
+        "Attempted SQL injection on login form",
+        "Database enumeration via UNION-based SQLi",
+        "Blind SQL injection targeting user authentication"
+    ],
+    "DDoS Attack": [
+        "UDP flood attack detected",
+        "SYN flood overwhelming network resources",
+        "HTTP flood targeting web application"
+    ],
+    "Brute Force Login": [
+        "Multiple failed SSH login attempts",
+        "Credential stuffing attack on admin panel",
+        "Dictionary attack on FTP service"
+    ],
+    "Port Scan": [
+        "Comprehensive port scan detected",
+        "Stealth SYN scan activity",
+        "Service enumeration attempt"
+    ],
+    "Malware Distribution": [
+        "Trojan payload delivery attempt",
+        "Botnet command and control communication",
+        "Malicious JavaScript injection"
+    ]
+}
+
+PROTOCOLS = ["TCP", "UDP", "HTTP", "HTTPS", "SSH", "FTP", "ICMP"]
+COMMON_PORTS = [21, 22, 23, 25, 80, 443, 3306, 3389, 5432, 8080]
+
+def generate_random_ip():
+    """Generate a random IP address"""
+    return f"{random.randint(1, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 255)}"
+
+def generate_simulated_event():
+    """Generate a simulated security event"""
+    attack_type = random.choice(ATTACK_TYPES)
+    source_country = random.choice(COUNTRIES)
+    target_country = random.choice(COUNTRIES)
+    
+    # Ensure source and target are different
+    while target_country == source_country:
+        target_country = random.choice(COUNTRIES)
+    
+    # Get description for the attack type, or use generic
+    descriptions = ATTACK_DESCRIPTIONS.get(attack_type, ["Suspicious activity detected"])
+    description = random.choice(descriptions)
+    
+    # Randomly choose between AbuseIPDB-style and OTX-style events
+    if random.random() < 0.5:
+        # AbuseIPDB-style event
+        return {
+            "source": "AbuseIPDB",
+            "timestamp": (datetime.utcnow() - timedelta(minutes=random.randint(0, 60))).isoformat(),
+            "abuse_attacker_country": source_country,
+            "abuse_victim_country": target_country,
+            "abuse_attack": description,
+            "otx_name": None,
+            "otx_description": None,
+            "otx_country": None,
+        }
+    else:
+        # OTX-style event
+        return {
+            "source": "OTX",
+            "timestamp": (datetime.utcnow() - timedelta(minutes=random.randint(0, 60))).isoformat(),
+            "abuse_attacker_country": None,
+            "abuse_victim_country": None,
+            "abuse_attack": None,
+            "otx_name": f"{attack_type} Campaign",
+            "otx_description": f"{description} targeting {target_country}",
+            "otx_country": target_country
+        }
+
+async def simulate_attacks_loop(interval: int = 30):
+    """Continuously generate simulated attack events"""
+    while True:
+        try:
+            async for db in get_db():
+                # Generate 3-8 random events per cycle
+                num_events = random.randint(3, 8)
+                events_to_add = [generate_simulated_event() for _ in range(num_events)]
+                
+                # Add events to database
+                for event_data in events_to_add:
+                    event = Event(**event_data)
+                    db.add(event)
+                
+                await db.commit()
+                print(f"[INFO] Generated {num_events} simulated attack events")
+                
+        except Exception as exc:
+            print(f"[ERROR] simulate_attacks_loop: {exc}")
+        
+        await asyncio.sleep(interval)
 
 # function to continuously create arcs jsons, summarize, and log events
 async def arc_and_log_batch(db):
@@ -86,8 +205,13 @@ async def lifespan(app: FastAPI):
     await init_db()
 
     tasks = [
-        asyncio.create_task(fetch_otx_loop()),
-        asyncio.create_task(fetch_abuseipdb_loop()),
+        # REAL API FETCHING (COMMENTED OUT)
+        # asyncio.create_task(fetch_otx_loop()),
+        # asyncio.create_task(fetch_abuseipdb_loop()),
+        
+        # SIMULATED ATTACK GENERATION
+        asyncio.create_task(simulate_attacks_loop()),
+        
         asyncio.create_task(summariser_loop()),
     ]
 
