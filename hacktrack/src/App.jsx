@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import DeckGL from '@deck.gl/react';
 import { GeoJsonLayer, ArcLayer, ScatterplotLayer } from '@deck.gl/layers';
-import { COORDINATE_SYSTEM, WebMercatorViewport } from '@deck.gl/core';
+import { COORDINATE_SYSTEM } from '@deck.gl/core';
 import { countriesGeoJson } from './data/countries';
 import { geoCentroid, geoDistance } from 'd3-geo';
 import { TransitionGroup, CSSTransition } from 'react-transition-group';
 import './App.css';
 
 /* View Initialization */
-
 const INITIAL_VIEW_STATE = {
   longitude: 25,
   latitude: 25,
@@ -22,11 +21,14 @@ const INITIAL_VIEW_STATE = {
 function getViewState() {
   return INITIAL_VIEW_STATE;
 }
+
+// Helper to calculate arc height based on distance
 function arcHeight(src, dst) {
   const km = geoDistance(src, dst);
   return Math.max(0, km * 0.25);
 }
 
+// Hook to pre-calculate country centroids
 const useCountryCentroids = () =>
   useMemo(
     () =>
@@ -39,8 +41,8 @@ const useCountryCentroids = () =>
 
 // log and fetch timings
 const MAX_LOGS = 4
-const INTERVAL_FETCH = 20000;
-const INTERVAL_DRAIN = 1500;
+const INTERVAL_FETCH = 10000;
+// INTERVAL_DRAIN is removed, now handled by getRandomDrainInterval
 
 /* Animation Timing */
 const INITIAL_FLARE_FADE_IN_DURATION = 400;
@@ -92,25 +94,6 @@ const flareAlphaAtAge = (age, type) => {
   return getAlphaForLifecycle(age, flare2_fadeInStartTime, INITIAL_FLARE_FADE_IN_DURATION, flare2_fadeOutStartTime, ELEMENT_FADE_OUT_DURATION);
 };
 
-// arc simulation for now:
-const generateRandomArcs = (centroids, count = 1) => {
-  const now = Date.now();
-  const result = [];
-  for (let i = 0; i < count; i++) {
-    const srcCentroid = centroids[Math.floor(Math.random() * centroids.length)];
-    // 1 in 4 chance of a self-attack for demo purposes
-    const isSelfAttack = Math.random() < 0.25;
-    const dstCentroid = isSelfAttack ? srcCentroid : centroids[Math.floor(Math.random() * centroids.length)];
-
-    result.push({
-      src: srcCentroid.coord,
-      dst: dstCentroid.coord,
-      t0: now
-    });
-  }
-  return result;
-};
-
 /* Main Component */
 export default function App() {
   const [logs, setLogs] = useState([]);
@@ -119,85 +102,87 @@ export default function App() {
   const logQueue = useRef([]);
   const logRefs = useRef(new Map());
 
-  // // Fetch logs periodically and add to queue
-  // useEffect(() => {
+  // Helper function to get a random delay between 2000ms (2s) and 5000ms (5s)
+  const getRandomDrainInterval = () => {
+    // Range is 5000 - 2000 = 3000ms. Minimum is 2000ms.
+    return Math.floor(Math.random() * 3000) + 2000;
+  };
 
-  //   const fetchLiveLogs = async () => {
-  //     try {
-  //       const res = await fetch('http://localhost:8000/logs');
-  //       console.log("Fetching Logs")
-  //       const text = await res.text();
-  //       if (!text) return;
-  //       const data = JSON.parse(text);
-  //       if (!data.logs) return;
-
-  //       logQueue.current.push(...data.logs);
-  //     } catch (err) {
-  //       console.error("Failed to fetch logs:", err);
-  //     }
-  //   };
-
-  //   const fetchInterval = setInterval(fetchLiveLogs, INTERVAL_FETCH);
-  //   fetchLiveLogs(); // run once immediately
-
-  //   return () => clearInterval(fetchInterval);
-  // }, [centroids]);
-
-  // placeholder for fetch logs function
+  // Fetch logs periodically and add to queue
   useEffect(() => {
-    const generateRandomArcsInterval = setInterval(() => {
-      const newArcs = generateRandomArcs(centroids, 1); // Generate 1 random arc
-      setArcs(prev => [...prev, ...newArcs]);
+    const fetchLiveLogs = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/logs');
+        console.log("Fetching Logs")
+        const text = await res.text();
+        if (!text) return;
+        const data = JSON.parse(text);
+        if (!data.logs) return;
 
-      // Optionally, generate a random log entry for each arc
-      const newLog = {
-        id: `${Date.now()}-${Math.random()}`,
-        text: `Simulated attack from ${newArcs[0].src} to ${newArcs[0].dst}`,
-        meta: {
-          source: 'Simulated',
-          attack: 'Simulated Attack',
-          timestamp: Date.now(),
-        },
-      };
-      setLogs(prev => [newLog, ...prev].slice(0, MAX_LOGS));
-    }, 1000);
+        logQueue.current.push(...data.logs);
+      } catch (err) {
+        console.error("Failed to fetch logs:", err);
+      }
+    };
 
-    return () => clearInterval(generateRandomArcsInterval);
+    const fetchInterval = setInterval(fetchLiveLogs, INTERVAL_FETCH);
+    fetchLiveLogs(); // run once immediately
+
+    return () => clearInterval(fetchInterval);
   }, [centroids]);
 
   // Drain queue and add entries one by one
   useEffect(() => {
-    const drainInterval = setInterval(() => {
-      if (logQueue.current.length === 0) return;
+    let timeoutId;
 
+    const drainLogQueue = () => {
+      if (logQueue.current.length === 0) {
+        // If queue is empty, wait for a fixed minimum time before checking again
+        const checkInterval = 2000;
+        timeoutId = setTimeout(drainLogQueue, checkInterval);
+        return;
+      }
+
+      // 1. Get the next log from the queue
       const [event, arc, summary] = logQueue.current.shift();
       const t0 = Date.now();
 
-      // Add arc
+      // 2. Add arc
       if (arc && JSON.stringify(arc.src) === JSON.stringify([0, 0]) && arc.dst) {
         setArcs(prev => [...prev, { src: arc.dst, dst: arc.dst, t0 }]);
       } else if (arc && arc.src && arc.dst) {
         setArcs(prev => [...prev, { src: arc.src, dst: arc.dst, t0 }]);
       } 
 
-      // Add log
+      // 3. Add log to use resolved countries
       setLogs(prev => {
         const newLog = {
           id: `${t0}-${Math.random()}`,
-          text: summary,
+          text: summary.summary,
           meta: {
-            source: event.source,
+            // Use the AI-resolved attacker country
+            attackerCountry: event.resolved_attacker_country,
+            // Use the AI-resolved victim country
+            victimCountry: event.resolved_victim_country, 
             attack: event.abuse_attack || event.otx_name,
             timestamp: event.timestamp
           }
         };
         return [newLog, ...prev].slice(0, MAX_LOGS);
       });
-    }, INTERVAL_DRAIN);
 
-    return () => clearInterval(drainInterval);
-  }, []);
+      // 4. Schedule the next drain with a random interval
+      const nextInterval = getRandomDrainInterval();
+      console.log(`Next log drain in ${nextInterval}ms`);
+      timeoutId = setTimeout(drainLogQueue, nextInterval);
+    };
 
+    // Start the recursive loop with an initial random delay
+    timeoutId = setTimeout(drainLogQueue, getRandomDrainInterval());
+
+    // Cleanup function to clear the timeout when the component unmounts
+    return () => clearTimeout(timeoutId);
+  }, []); // Empty dependency array means this runs once on mount
 
   /* Animation clock */
   const [time, setTime] = useState(Date.now());
@@ -386,7 +371,7 @@ export default function App() {
                 <div ref={ref} className="log-entry">
                   <div>{log.text}</div>
                   <div style={{ fontSize: '0.7em', color: 'var(--text-dim)', marginTop: '0.2em' }}>
-                    {log.meta?.source} • {log.meta?.attack} • {new Date(log.meta?.timestamp).toLocaleString()}
+                    {log.meta?.attackerCountry || 'Unknown'} • {log.meta?.victimCountry || 'Unknown'} • {new Date(log.meta?.timestamp).toLocaleString()}
                   </div>
                 </div>
               </CSSTransition>
