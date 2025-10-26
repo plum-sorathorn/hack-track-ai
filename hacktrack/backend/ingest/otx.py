@@ -10,7 +10,7 @@ if not OTX_API_KEY:
 
 BASE = "https://otx.alienvault.com/api/v1"
 PAGE_SIZE = 50
-MAX_PAGES = 2 # will increase pages with testing, 
+MAX_PAGES = 3 # will increase pages with testing, 
 # might also have to change timeout duration due to long fetch times
 
 # 🔧 Transform OTX pulse into a valid Event record
