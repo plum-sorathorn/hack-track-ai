@@ -120,7 +120,7 @@ async def lifespan(app: FastAPI):
     tasks = [
         # REAL API FETCHING (COMMENTED OUT)
         asyncio.create_task(fetch_otx_loop()),
-        # asyncio.create_task(fetch_abuseipdb_loop()),
+        asyncio.create_task(fetch_abuseipdb_loop()),
         
         # SIMULATED ATTACK GENERATION
         # asyncio.create_task(simulate_attacks_loop()),
