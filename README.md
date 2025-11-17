@@ -1,5 +1,7 @@
 # HackTrackAI
 
+<img src="gif/demo.gif" alt="Demonstration of HackTrackAI" width="700" height="400">
+
 **HackTrackAI** is an AI-powered **cyber threat intelligence visualization platform** that tracks and summarizes global cyberattacks in real time.
 
 The platform integrates:
