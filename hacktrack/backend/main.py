@@ -14,6 +14,8 @@ from sqlalchemy.future import select
 from backend.db.session import get_db
 from backend.db.init import init_db
 from backend.db.models import Event
+from typing import Dict, Any, Optional, Tuple
+from backend.ai.summarizer import SummaryOutput
 
 # background ingest
 from backend.utils.ingestor import (
@@ -26,131 +28,15 @@ from backend.ai.summarizer import summarize_event, create_arc_json
 
 load_dotenv()
 
-log_and_arc_queue: deque[str] = deque(maxlen=500)
+log_and_arc_queue: deque[Tuple[Event, Optional[Dict[str, Any]], SummaryOutput]] = deque(maxlen=500)
 
 from fastapi.middleware.cors import CORSMiddleware
 
 # START OF HELPER FUNCTIONS 
 
-# Simulated attack data
-ATTACK_TYPES = [
-    "SQL Injection",
-    "DDoS Attack",
-    "Brute Force Login",
-    "Port Scan",
-    "Malware Distribution",
-    "Phishing Campaign",
-    "XSS Attack",
-    "Ransomware",
-    "Cryptojacking",
-    "Data Exfiltration"
-]
-
-COUNTRIES = [
-    "United States", "China", "Russia", "Brazil", "India",
-    "Germany", "United Kingdom", "France", "Japan", "South Korea",
-    "Canada", "Australia", "Netherlands", "Singapore", "Israel"
-]
-
-ATTACK_DESCRIPTIONS = {
-    "SQL Injection": [
-        "Attempted SQL injection on login form",
-        "Database enumeration via UNION-based SQLi",
-        "Blind SQL injection targeting user authentication"
-    ],
-    "DDoS Attack": [
-        "UDP flood attack detected",
-        "SYN flood overwhelming network resources",
-        "HTTP flood targeting web application"
-    ],
-    "Brute Force Login": [
-        "Multiple failed SSH login attempts",
-        "Credential stuffing attack on admin panel",
-        "Dictionary attack on FTP service"
-    ],
-    "Port Scan": [
-        "Comprehensive port scan detected",
-        "Stealth SYN scan activity",
-        "Service enumeration attempt"
-    ],
-    "Malware Distribution": [
-        "Trojan payload delivery attempt",
-        "Botnet command and control communication",
-        "Malicious JavaScript injection"
-    ]
-}
-
-PROTOCOLS = ["TCP", "UDP", "HTTP", "HTTPS", "SSH", "FTP", "ICMP"]
-COMMON_PORTS = [21, 22, 23, 25, 80, 443, 3306, 3389, 5432, 8080]
-
-def generate_random_ip():
-    """Generate a random IP address"""
-    return f"{random.randint(1, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 255)}"
-
-def generate_simulated_event():
-    """Generate a simulated security event"""
-    attack_type = random.choice(ATTACK_TYPES)
-    source_country = random.choice(COUNTRIES)
-    target_country = random.choice(COUNTRIES)
-    
-    # Ensure source and target are different
-    while target_country == source_country:
-        target_country = random.choice(COUNTRIES)
-    
-    # Get description for the attack type, or use generic
-    descriptions = ATTACK_DESCRIPTIONS.get(attack_type, ["Suspicious activity detected"])
-    description = random.choice(descriptions)
-    
-    # Randomly choose between AbuseIPDB-style and OTX-style events
-    if random.random() < 0.5:
-        # AbuseIPDB-style event
-        return {
-            "source": "AbuseIPDB",
-            "timestamp": (datetime.utcnow() - timedelta(minutes=random.randint(0, 60))).isoformat(),
-            "abuse_attacker_country": source_country,
-            "abuse_victim_country": target_country,
-            "abuse_attack": description,
-            "otx_name": None,
-            "otx_description": None,
-            "otx_country": None,
-        }
-    else:
-        # OTX-style event
-        return {
-            "source": "OTX",
-            "timestamp": (datetime.utcnow() - timedelta(minutes=random.randint(0, 60))).isoformat(),
-            "abuse_attacker_country": None,
-            "abuse_victim_country": None,
-            "abuse_attack": None,
-            "otx_name": f"{attack_type} Campaign",
-            "otx_description": f"{description} targeting {target_country}",
-            "otx_country": target_country
-        }
-
-async def simulate_attacks_loop(interval: int = 30):
-    """Continuously generate simulated attack events"""
-    while True:
-        try:
-            async for db in get_db():
-                # Generate 3-8 random events per cycle
-                num_events = random.randint(3, 8)
-                events_to_add = [generate_simulated_event() for _ in range(num_events)]
-                
-                # Add events to database
-                for event_data in events_to_add:
-                    event = Event(**event_data)
-                    db.add(event)
-                
-                await db.commit()
-                print(f"[INFO] Generated {num_events} simulated attack events")
-                
-        except Exception as exc:
-            print(f"[ERROR] simulate_attacks_loop: {exc}")
-        
-        await asyncio.sleep(interval)
-
 # function to continuously create arcs jsons, summarize, and log events
 async def arc_and_log_batch(db):
+    print("[INFO] started summarization of events")
     # take 50 database entries
     events = (await db.execute(select(Event).order_by(asc(Event.timestamp)).limit(50))).scalars().all()
     if not events:
@@ -158,30 +44,57 @@ async def arc_and_log_batch(db):
     
     # function to create summaries/arcs
     sem = asyncio.Semaphore(10)
-    async def _wrapped(func, event):
+    async def _wrapped_summary(event):
         async with sem:
-            return await func(event)
+            return await summarize_event(event)
 
-    summaries = await asyncio.gather(*[asyncio.create_task(_wrapped(summarize_event, event)) for event in events], return_exceptions=True)
+    summaries = await asyncio.gather(*[asyncio.create_task(_wrapped_summary(event)) for event in events], return_exceptions=True)
     
     arcs = []
-    for event in events:
+    
+    # We iterate over the results of the summary batch
+    for event, summary in zip(events, summaries):
+        if isinstance(summary, Exception):
+            arcs.append(summary)
+            continue
+
         try:
-            arc = create_arc_json(event)
-            arcs.append(arc)
+            # arc will now be a dict like {"arc": {...}, "resolved_names": {...}} or None
+            resolved_arc_data = create_arc_json(
+                summary['attacker_country'],
+                summary['victim_country']
+            )
+            arcs.append(resolved_arc_data) 
         except Exception as arc_exc:
             arcs.append(arc_exc)
 
     ids_to_delete = []
-    for event, arc, summary in zip(events, arcs, summaries):
+    # resolved_arc_data is the full dict output of create_arc_json, or an Exception
+    for event, resolved_arc_data, summary in zip(events, arcs, summaries):
+        # Handle exceptions from summarization
         if isinstance(summary, Exception):
             print(f"[ERROR] summarising event {event.id}:\n{''.join(traceback.format_exception(summary))}")
-            continue
+            continue # Skip to next event, do not delete
 
-        if isinstance(arc, Exception):
-            print(f"[ERROR] creating arc for event {event.id}:\n{''.join(traceback.format_exception(arc))}")
+        # Check if arc creation succeeded or failed
+        if isinstance(resolved_arc_data, Exception) or resolved_arc_data is None:
+            if isinstance(resolved_arc_data, Exception):
+                print(f"[ERROR] creating arc for event {event.id}:\n{''.join(traceback.format_exception(resolved_arc_data))}")
+            
             arc = None
+            # If the arc logic failed, we fall back to the original AI summary for logging
+            event.resolved_attacker_country = summary.get('attacker_country')
+            event.resolved_victim_country = summary.get('victim_country')
+        else:
+            # Arc logic succeeded, use the resolved name for logging
+            arc = resolved_arc_data['arc']
+            resolved_names = resolved_arc_data['resolved_names']
 
+            # Use the RESOLVED country names (original or random fallback) for the log
+            event.resolved_attacker_country = resolved_names['attacker_country']
+            event.resolved_victim_country = resolved_names['victim_country']
+
+        # log_and_arc_queue is appended with the event, arc (or None), and the summary dictionary
         log_and_arc_queue.append((event, arc, summary))
         ids_to_delete.append(event.id)
 
@@ -190,7 +103,7 @@ async def arc_and_log_batch(db):
         await db.commit()
         print("[INFO] summarised events deleted")
 
-async def summariser_loop(interval: int = 60):
+async def summariser_loop(interval: int = 30):
     while True:
         try:
             async for db in get_db():
@@ -206,12 +119,13 @@ async def lifespan(app: FastAPI):
 
     tasks = [
         # REAL API FETCHING (COMMENTED OUT)
-        # asyncio.create_task(fetch_otx_loop()),
-        # asyncio.create_task(fetch_abuseipdb_loop()),
+        asyncio.create_task(fetch_otx_loop()),
+        asyncio.create_task(fetch_abuseipdb_loop()),
         
         # SIMULATED ATTACK GENERATION
-        asyncio.create_task(simulate_attacks_loop()),
+        # asyncio.create_task(simulate_attacks_loop()),
         
+        # summarization loop
         asyncio.create_task(summariser_loop()),
     ]
 
@@ -252,8 +166,13 @@ async def get_events(db=Depends(get_db)):
 
 @app.get("/logs")
 async def get_logs():
-    # just drain up to 50 most-recent summaries
-    output = [log_and_arc_queue.popleft() for _ in range(min(50, len(log_and_arc_queue)))]
+    output = []
+    # drain 50 entries from queue
+    for _ in range(min(50, len(log_and_arc_queue))):
+        event, arc, summary = log_and_arc_queue.popleft()
+        event_dict = event.__dict__.copy()
+        event_dict.pop('_sa_instance_state', None) 
+        output.append((event_dict, arc, summary)) 
 
     return {"logs": output}
 
